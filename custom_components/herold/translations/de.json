@@ -1,0 +1,231 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Herold einrichten",
+        "description": "Grundeinstellungen für die Herold-Benachrichtigungszentrale.",
+        "data": {
+          "recipient": "Empfänger (Person)",
+          "integration_name": "Name"
+        }
+      },
+      "rooms": {
+        "title": "Raum hinzufügen",
+        "description": "Mindestens ein Assist-Satellit oder Media Player ist erforderlich. Mehrere Präsenzsensoren werden ODER-verknüpft.",
+        "data": {
+          "name": "Raumname",
+          "occupancy_entities": "Präsenzsensoren",
+          "sat_entity": "Assist-Satellit",
+          "media_player_entity": "Media Player",
+          "light_entity": "Licht (P4-Blinken)",
+          "priority_weight": "Prioritätsgewicht"
+        }
+      },
+      "room_menu": {
+        "title": "Räume",
+        "menu_options": {
+          "rooms": "Weiteren Raum hinzufügen",
+          "voice": "Fertig — weiter zu den Sprach-Einstellungen"
+        }
+      },
+      "voice": {
+        "title": "Sprache",
+        "data": {
+          "primary_tts_entity": "Primäres TTS",
+          "fallback_tts_entity": "Fallback-TTS (offline)",
+          "internet_sensor": "Internet-Erkennungssensor"
+        }
+      },
+      "push": {
+        "title": "Push",
+        "data": {
+          "mobile_app_devices": "Mobile-App-Notify-Entitäten"
+        }
+      },
+      "dnd": {
+        "title": "Nicht stören",
+        "data": {
+          "external_dnd_entity": "Externe DND-Entität",
+          "create_internal_switch": "Internen DND-Schalter erstellen"
+        }
+      },
+      "offline": {
+        "title": "Offline-Verhalten",
+        "data": {
+          "enable_offline_fallback": "Offline-TTS-Fallback aktivieren",
+          "enable_offline_queue": "Offline-Warteschlange aktivieren"
+        }
+      }
+    },
+    "error": {
+      "room_no_output": "Mindestens ein Assist-Satellit oder Media Player muss gesetzt sein.",
+      "room_no_occupancy": "Wähle mindestens einen Präsenzsensor aus."
+    },
+    "abort": {
+      "single_instance_allowed": "Bereits konfiguriert. Nur eine Instanz ist möglich."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Herold-Optionen",
+        "menu_options": {
+          "basic": "Grundlagen (Empfänger, Name)",
+          "rooms_menu": "Räume (hinzufügen / bearbeiten / entfernen)",
+          "voice": "Sprache (TTS, Internet-Sensor)",
+          "push": "Push (Mobile-App-Geräte)",
+          "dnd": "Nicht stören",
+          "offline": "Offline-Verhalten"
+        }
+      },
+      "basic": {
+        "title": "Grundlagen",
+        "data": {
+          "recipient": "Empfänger (Person)",
+          "integration_name": "Name"
+        }
+      },
+      "voice": {
+        "title": "Sprache",
+        "data": {
+          "primary_tts_entity": "Primäres TTS",
+          "fallback_tts_entity": "Fallback-TTS (offline)",
+          "internet_sensor": "Internet-Erkennungssensor"
+        }
+      },
+      "push": {
+        "title": "Push",
+        "data": {
+          "mobile_app_devices": "Mobile-App-Notify-Entitäten"
+        }
+      },
+      "dnd": {
+        "title": "Nicht stören",
+        "data": {
+          "external_dnd_entity": "Externe DND-Entität",
+          "create_internal_switch": "Internen DND-Schalter erstellen"
+        }
+      },
+      "offline": {
+        "title": "Offline-Verhalten",
+        "data": {
+          "enable_offline_fallback": "Offline-TTS-Fallback aktivieren",
+          "enable_offline_queue": "Offline-Warteschlange aktivieren"
+        }
+      },
+      "rooms_menu": {
+        "title": "Räume",
+        "menu_options": {
+          "room_add": "Raum hinzufügen",
+          "room_edit": "Raum bearbeiten",
+          "room_remove": "Räume entfernen",
+          "save": "Speichern und schließen"
+        }
+      },
+      "room_add": {
+        "title": "Raum hinzufügen",
+        "data": {
+          "name": "Raumname",
+          "occupancy_entities": "Präsenzsensoren",
+          "sat_entity": "Assist-Satellit",
+          "media_player_entity": "Media Player",
+          "light_entity": "Licht (P4-Blinken)",
+          "priority_weight": "Prioritätsgewicht"
+        }
+      },
+      "room_edit": {
+        "title": "Raum bearbeiten",
+        "data": {
+          "room_index": "Raum"
+        }
+      },
+      "room_edit_form": {
+        "title": "Raum bearbeiten",
+        "data": {
+          "name": "Raumname",
+          "occupancy_entities": "Präsenzsensoren",
+          "sat_entity": "Assist-Satellit",
+          "media_player_entity": "Media Player",
+          "light_entity": "Licht (P4-Blinken)",
+          "priority_weight": "Prioritätsgewicht"
+        }
+      },
+      "room_remove": {
+        "title": "Räume entfernen",
+        "data": {
+          "room_indexes": "Zu entfernende Räume"
+        }
+      }
+    },
+    "error": {
+      "room_no_output": "Mindestens ein Assist-Satellit oder Media Player muss gesetzt sein.",
+      "room_no_occupancy": "Wähle mindestens einen Präsenzsensor aus.",
+      "no_rooms_left": "Mindestens ein Raum muss konfiguriert bleiben."
+    }
+  },
+  "entity": {
+    "switch": {
+      "dnd": {
+        "name": "DND"
+      }
+    },
+    "sensor": {
+      "last_delivery": {
+        "name": "Letzte Zustellung"
+      }
+    },
+    "binary_sensor": {
+      "online": {
+        "name": "Online"
+      },
+      "dnd_active": {
+        "name": "DND aktiv"
+      }
+    },
+    "button": {
+      "test": {
+        "name": "Testnachricht"
+      }
+    }
+  },
+  "services": {
+    "send": {
+      "name": "Benachrichtigung senden",
+      "description": "Sendet eine Benachrichtigung über den Herold-Dispatcher (Sprache und Push in Phase 1).",
+      "fields": {
+        "message": {
+          "name": "Nachricht",
+          "description": "Der Benachrichtigungstext."
+        },
+        "priority": {
+          "name": "Priorität",
+          "description": "0 = intern, 1 = Todo, 2 = normal, 3 = wichtig, 4 = Alarm."
+        },
+        "recipient": {
+          "name": "Empfänger",
+          "description": "Person-Entität; Standard ist der konfigurierte Empfänger."
+        },
+        "target_player": {
+          "name": "Ziel-Player",
+          "description": "Optionales Ziel, das die Raumerkennung überschreibt."
+        },
+        "title": {
+          "name": "Titel",
+          "description": "Optionaler Titel der Push-Benachrichtigung."
+        },
+        "tag": {
+          "name": "Tag",
+          "description": "Optionales Tag für Deduplizierung (ab Phase 4 genutzt)."
+        },
+        "ttl_minutes": {
+          "name": "TTL (Minuten)",
+          "description": "Optionaler automatischer Ablauf (ab Phase 2 genutzt)."
+        },
+        "callback_event": {
+          "name": "Callback-Event",
+          "description": "Legacy-Callback-Event-ID. Standard AI_CONFIRM feuert AI_YES/AI_NO (Query-Modus kommt in Phase 2)."
+        }
+      }
+    }
+  }
+}

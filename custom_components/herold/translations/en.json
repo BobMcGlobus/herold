@@ -1,0 +1,231 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Herold setup",
+        "description": "Basic settings for the Herold notification hub.",
+        "data": {
+          "recipient": "Recipient (person)",
+          "integration_name": "Name"
+        }
+      },
+      "rooms": {
+        "title": "Add room",
+        "description": "At least one of assist satellite or media player is required. Multiple occupancy sensors are OR-linked.",
+        "data": {
+          "name": "Room name",
+          "occupancy_entities": "Occupancy sensors",
+          "sat_entity": "Assist satellite",
+          "media_player_entity": "Media player",
+          "light_entity": "Light (P4 flash)",
+          "priority_weight": "Priority weight"
+        }
+      },
+      "room_menu": {
+        "title": "Rooms",
+        "menu_options": {
+          "rooms": "Add another room",
+          "voice": "Done — continue with voice settings"
+        }
+      },
+      "voice": {
+        "title": "Voice",
+        "data": {
+          "primary_tts_entity": "Primary TTS",
+          "fallback_tts_entity": "Fallback TTS (offline)",
+          "internet_sensor": "Internet detection sensor"
+        }
+      },
+      "push": {
+        "title": "Push",
+        "data": {
+          "mobile_app_devices": "Mobile app notify entities"
+        }
+      },
+      "dnd": {
+        "title": "Do not disturb",
+        "data": {
+          "external_dnd_entity": "External DND entity",
+          "create_internal_switch": "Create internal DND switch"
+        }
+      },
+      "offline": {
+        "title": "Offline behavior",
+        "data": {
+          "enable_offline_fallback": "Enable offline TTS fallback",
+          "enable_offline_queue": "Enable offline queue"
+        }
+      }
+    },
+    "error": {
+      "room_no_output": "At least one of assist satellite or media player must be set.",
+      "room_no_occupancy": "Select at least one occupancy sensor."
+    },
+    "abort": {
+      "single_instance_allowed": "Already configured. Only a single instance is allowed."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Herold options",
+        "menu_options": {
+          "basic": "Basics (recipient, name)",
+          "rooms_menu": "Rooms (add / edit / remove)",
+          "voice": "Voice (TTS, internet sensor)",
+          "push": "Push (mobile app devices)",
+          "dnd": "Do not disturb",
+          "offline": "Offline behavior"
+        }
+      },
+      "basic": {
+        "title": "Basics",
+        "data": {
+          "recipient": "Recipient (person)",
+          "integration_name": "Name"
+        }
+      },
+      "voice": {
+        "title": "Voice",
+        "data": {
+          "primary_tts_entity": "Primary TTS",
+          "fallback_tts_entity": "Fallback TTS (offline)",
+          "internet_sensor": "Internet detection sensor"
+        }
+      },
+      "push": {
+        "title": "Push",
+        "data": {
+          "mobile_app_devices": "Mobile app notify entities"
+        }
+      },
+      "dnd": {
+        "title": "Do not disturb",
+        "data": {
+          "external_dnd_entity": "External DND entity",
+          "create_internal_switch": "Create internal DND switch"
+        }
+      },
+      "offline": {
+        "title": "Offline behavior",
+        "data": {
+          "enable_offline_fallback": "Enable offline TTS fallback",
+          "enable_offline_queue": "Enable offline queue"
+        }
+      },
+      "rooms_menu": {
+        "title": "Rooms",
+        "menu_options": {
+          "room_add": "Add room",
+          "room_edit": "Edit room",
+          "room_remove": "Remove rooms",
+          "save": "Save and close"
+        }
+      },
+      "room_add": {
+        "title": "Add room",
+        "data": {
+          "name": "Room name",
+          "occupancy_entities": "Occupancy sensors",
+          "sat_entity": "Assist satellite",
+          "media_player_entity": "Media player",
+          "light_entity": "Light (P4 flash)",
+          "priority_weight": "Priority weight"
+        }
+      },
+      "room_edit": {
+        "title": "Edit room",
+        "data": {
+          "room_index": "Room"
+        }
+      },
+      "room_edit_form": {
+        "title": "Edit room",
+        "data": {
+          "name": "Room name",
+          "occupancy_entities": "Occupancy sensors",
+          "sat_entity": "Assist satellite",
+          "media_player_entity": "Media player",
+          "light_entity": "Light (P4 flash)",
+          "priority_weight": "Priority weight"
+        }
+      },
+      "room_remove": {
+        "title": "Remove rooms",
+        "data": {
+          "room_indexes": "Rooms to remove"
+        }
+      }
+    },
+    "error": {
+      "room_no_output": "At least one of assist satellite or media player must be set.",
+      "room_no_occupancy": "Select at least one occupancy sensor.",
+      "no_rooms_left": "At least one room must remain configured."
+    }
+  },
+  "entity": {
+    "switch": {
+      "dnd": {
+        "name": "DND"
+      }
+    },
+    "sensor": {
+      "last_delivery": {
+        "name": "Last delivery"
+      }
+    },
+    "binary_sensor": {
+      "online": {
+        "name": "Online"
+      },
+      "dnd_active": {
+        "name": "DND active"
+      }
+    },
+    "button": {
+      "test": {
+        "name": "Test notification"
+      }
+    }
+  },
+  "services": {
+    "send": {
+      "name": "Send notification",
+      "description": "Sends a notification through the Herold dispatcher (voice and push in Phase 1).",
+      "fields": {
+        "message": {
+          "name": "Message",
+          "description": "The notification text."
+        },
+        "priority": {
+          "name": "Priority",
+          "description": "0 = internal, 1 = todo, 2 = normal, 3 = important, 4 = alarm."
+        },
+        "recipient": {
+          "name": "Recipient",
+          "description": "Person entity; defaults to the configured recipient."
+        },
+        "target_player": {
+          "name": "Target player",
+          "description": "Optional target that overrides room detection."
+        },
+        "title": {
+          "name": "Title",
+          "description": "Optional push notification title."
+        },
+        "tag": {
+          "name": "Tag",
+          "description": "Optional tag for deduplication (used from Phase 4)."
+        },
+        "ttl_minutes": {
+          "name": "TTL (minutes)",
+          "description": "Optional auto-expiry (used from Phase 2)."
+        },
+        "callback_event": {
+          "name": "Callback event",
+          "description": "Legacy callback event id. Default AI_CONFIRM fires AI_YES/AI_NO (query mode lands in Phase 2)."
+        }
+      }
+    }
+  }
+}

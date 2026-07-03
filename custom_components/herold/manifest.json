@@ -1,0 +1,19 @@
+{
+  "domain": "herold",
+  "name": "Herold",
+  "codeowners": ["@BobMcGlobus"],
+  "config_flow": true,
+  "dependencies": [
+    "assist_satellite",
+    "conversation",
+    "media_player",
+    "mobile_app",
+    "tts"
+  ],
+  "documentation": "https://github.com/BobMcGlobus/herold",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/BobMcGlobus/herold/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

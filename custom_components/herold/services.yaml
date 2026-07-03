@@ -1,0 +1,40 @@
+send:
+  fields:
+    message:
+      required: true
+      example: "Die Waschmaschine ist fertig"
+      selector:
+        text:
+          multiline: true
+    priority:
+      default: 2
+      selector:
+        number:
+          min: 0
+          max: 4
+          mode: slider
+    recipient:
+      selector:
+        entity:
+          domain: person
+    target_player:
+      selector:
+        entity:
+          domain:
+            - assist_satellite
+            - media_player
+    title:
+      selector:
+        text:
+    tag:
+      selector:
+        text:
+    ttl_minutes:
+      selector:
+        number:
+          min: 0
+          max: 1440
+    callback_event:
+      example: "AI_CONFIRM"
+      selector:
+        text:
