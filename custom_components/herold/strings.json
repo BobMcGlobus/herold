@@ -329,7 +329,7 @@
         },
         "template_vars": {
           "name": "Template variables",
-          "description": "Variables for the template placeholders, e.g. {\"appliance\": \"Waschmaschine\"}."
+          "description": "Variables for the template placeholders, e.g. appliance: Waschmaschine."
         },
         "ignore_rate_limit": {
           "name": "Ignore rate limit",
@@ -375,7 +375,7 @@
         },
         "escalation": {
           "name": "Escalation",
-          "description": "List of rules, e.g. [{\"after_minutes\": 5, \"raise_to_priority\": 3}] — unanswered queries get redelivered at higher priority."
+          "description": "List of rules with after_minutes and raise_to_priority — unanswered queries get redelivered at higher priority."
         },
         "recipient": {
           "name": "Recipient",

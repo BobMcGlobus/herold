@@ -329,7 +329,7 @@
         },
         "template_vars": {
           "name": "Vorlagen-Variablen",
-          "description": "Variablen für die Platzhalter, z.B. {\"appliance\": \"Waschmaschine\"}."
+          "description": "Variablen für die Platzhalter, z.B. appliance: Waschmaschine."
         },
         "ignore_rate_limit": {
           "name": "Rate-Limit ignorieren",
@@ -375,7 +375,7 @@
         },
         "escalation": {
           "name": "Eskalation",
-          "description": "Liste von Regeln, z.B. [{\"after_minutes\": 5, \"raise_to_priority\": 3}] — unbeantwortete Fragen werden mit höherer Priorität erneut zugestellt."
+          "description": "Liste von Regeln mit after_minutes und raise_to_priority — unbeantwortete Fragen werden mit höherer Priorität erneut zugestellt."
         },
         "recipient": {
           "name": "Empfänger",
