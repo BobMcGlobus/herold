@@ -31,26 +31,30 @@ Der Config Flow führt durch sechs Schritte:
 2. **Räume** (wiederholbar) — pro Raum: Präsenzsensoren (mehrere möglich, ODER-verknüpft), Assist-Satellit und/oder Media Player, optional Licht für den P4-Alarm-Flash
 3. **Sprache** — primäres TTS (z.B. ElevenLabs), optionales Fallback-TTS (z.B. Piper), Internet-Erkennungssensor
 4. **Push** — Mobile-App-Notify-Entitäten
-5. **Nicht stören** — optionale externe DND-Entität, interner DND-Schalter
-6. **Offline** — Offline-TTS-Fallback (opt-in), Offline-Warteschlange (Phase 2)
+5. **Chat** — optionale Telegram-Chat-ID für Nachrichten und Antwort-Buttons, optionaler Pending-Question-Helper (Legacy-Kompat für offene Fragen)
+6. **Nicht stören** — optionale externe DND-Entität, interner DND-Schalter
+7. **Offline** — Offline-TTS-Fallback (opt-in), Offline-Warteschlange (spätere Phase)
 
 Alle Sektionen sind später über die Integrations-Optionen editierbar; Räume können ohne Neueinrichtung hinzugefügt, bearbeitet und entfernt werden.
 
-## Feature-Matrix Phase 1
+## Feature-Matrix
 
 | Feature | Status |
 |---|---|
-| `herold.send` Service (P0–P4) | ✅ |
-| Raumbewusste Voice-Delivery (Occupancy → Satellit) | ✅ |
-| Multi-Occupancy-Sensoren pro Raum (ODER-verknüpft) | ✅ |
-| Media-Player-Only-Räume (`tts.speak` Fallback) | ✅ |
-| TTS-Kette: Primär → Offline-Fallback (z.B. ElevenLabs → Piper) | ✅ |
-| Mobile App Push (critical Sound für P4) | ✅ |
-| P4 Licht-Flash vor der Durchsage | ✅ |
-| DND-Schalter + externe DND-Entität | ✅ |
-| Debug-Entities (letzte Zustellung, Online, DND aktiv) | ✅ |
-| Test-Button | ✅ |
-| Query-Modus (Ja/Nein-Fragen), Telegram | 🔜 Phase 2 |
+| `herold.send` Service (P0–P4) | ✅ Phase 1 |
+| Raumbewusste Voice-Delivery (Occupancy → Satellit) | ✅ Phase 1 |
+| Multi-Occupancy-Sensoren pro Raum (ODER-verknüpft) | ✅ Phase 1 |
+| Media-Player-Only-Räume (`tts.speak` Fallback) | ✅ Phase 1 |
+| TTS-Kette: Primär → Offline-Fallback (z.B. ElevenLabs → Piper) | ✅ Phase 1 |
+| Mobile App Push (critical Sound für P4) | ✅ Phase 1 |
+| DND-Schalter + externe DND-Entität | ✅ Phase 1 |
+| `herold.query` — Fragen mit Antwort (yesno / open / choice) | ✅ Phase 2 |
+| Telegram-Channel mit Inline-Buttons (legacy-kompatibel) | ✅ Phase 2 |
+| Query-Persistenz über Neustarts, Timeout + default_answer | ✅ Phase 2 |
+| Multi-Occupancy-Konfliktauflösung (Gewicht + Aktualität) | ✅ Phase 2 |
+| Last-Known-Room-Fallback (TTL 15 min) | ✅ Phase 2 |
+| P4 Alarm-Blinken: mehrere Lichter und Szenen pro Raum | ✅ Phase 2 |
+| Pending-Sensoren (`pending_count`, `last_query`, `any_pending`) | ✅ Phase 2 |
 | P0 Self-Callback, Scheduler, LLM-Tools, Todo | 🔜 Phase 3 |
 | Templates, Rate-Limiting, DND-Sessions | 🔜 Phase 4 |
 
@@ -70,22 +74,39 @@ data:
   # callback_event: AI_CONFIRM
 ```
 
+## Service: `herold.query`
+
+```yaml
+service: herold.query
+data:
+  question: "Soll ich das Licht ausschalten?"
+  mode: yesno          # yesno · open · choice
+  # choices: ["Pizza", "Pasta", "Salat"]   # nur für mode: choice
+  priority: 2
+  timeout_minutes: 60
+  # default_answer: "Nein"   # wird beim Timeout automatisch verwendet
+  # callback_event: AI_CONFIRM
+```
+
+Antwortwege: Satelliten-Konversation (`start_conversation`), Telegram-Inline-Buttons, Freitext im Telegram-Chat (open), oder `herold.acknowledge` (id + answer). Offene Fragen überleben HA-Neustarts. Bei Antwort feuert `herold_answered` mit strukturiertem Payload — bei yesno zusätzlich das Legacy-Event (`AI_YES`/`AI_NO` bzw. `<custom>_YES`/`_NO`).
+
 ### Prioritätsmodell
 
-| Prio | Name | Verhalten (Phase 1) |
+| Prio | Name | Verhalten |
 |---|---|---|
 | 0 | Intern | Wird geskippt (LLM-Self-Callback kommt in Phase 3) |
 | 1 | Todo | Nur wenn zuhause & kein DND (Todo-Liste kommt in Phase 3) |
-| 2 | Normal | Voice wenn zuhause, sonst Push; blockiert bei DND |
-| 3 | Wichtig | Voice + Push, ignoriert DND |
-| 4 | Alarm | Warn-Durchsage + Licht-Flash + Critical Push, ignoriert DND |
+| 2 | Normal | Voice wenn zuhause, sonst Push + Telegram; blockiert bei DND |
+| 3 | Wichtig | Voice + Push + Telegram, ignoriert DND |
+| 4 | Alarm | Warn-Durchsage + Alarm-Blinken + Critical Push + Telegram, ignoriert DND |
 
 ## Migration vom Script
 
 Herold ist als Drop-in-Nachfolger des Omnichannel-Communicator-Scripts konzipiert:
 
 - **`input_boolean.notification_blocker`** kann im DND-Schritt als *externe DND-Entität* eingetragen werden — bestehende Automationen (Goodnight, Sport-Popup) bleiben unverändert.
-- **Callback-Events bleiben bit-exakt kompatibel:** `callback_event: AI_CONFIRM` (Default) feuert `AI_YES` / `AI_NO` — **ohne** CONFIRM-Teil, exakt wie das Original-Script. Ein Custom-Callback `XYZ` feuert `XYZ_YES` / `XYZ_NO`. (Das eigentliche Query-Handling mit Telegram-Buttons landet in Phase 2; die Event-Semantik ist bereits in `legacy_compat.py` festgeschrieben.)
+- **Callback-Events bleiben bit-exakt kompatibel:** `callback_event: AI_CONFIRM` (Default) erzeugt Telegram-Buttons mit den Callback-Daten `/AI_YES` / `/AI_NO` — **ohne** CONFIRM-Teil, exakt wie das Original-Script. Bestehende `telegram_callback`-Automationen laufen unverändert weiter; Herold feuert bei Antwort zusätzlich das HA-Event `AI_YES`/`AI_NO` (bzw. `<custom>_YES`/`_NO`) und `herold_answered`. Herold ruft bewusst **kein** `answer_callback_query` auf — das macht weiterhin deine bestehende Handler-Automation.
+- **Offene Fragen (`mode: open`)** spiegeln die Frage weiterhin in den konfigurierten `input_text`-Helper (z.B. `input_text.ai_pending_question`), damit die bestehende Telegram-Chat-Automation den Kontext behält.
 - **Empfohlener Rollout:** Integration parallel zum Script installieren, Verhalten vergleichen, Automationen schrittweise auf `herold.send` migrieren, Script erst nach zwei stabilen Wochen löschen.
 
 ## Entwicklung
@@ -94,7 +115,7 @@ Herold ist als Drop-in-Nachfolger des Omnichannel-Communicator-Scripts konzipier
 ./scripts/setup-dev.sh /pfad/zu/ha-config   # symlinkt die Integration
 ```
 
-Manuelle Testfälle: [PHASE_1_TESTPLAN.md](PHASE_1_TESTPLAN.md)
+Manuelle Testfälle: [PHASE_1_TESTPLAN.md](PHASE_1_TESTPLAN.md) · [PHASE_2_TESTPLAN.md](PHASE_2_TESTPLAN.md)
 
 ## Lizenz
 

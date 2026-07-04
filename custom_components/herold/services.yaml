@@ -38,3 +38,85 @@ send:
       example: "AI_CONFIRM"
       selector:
         text:
+
+query:
+  fields:
+    question:
+      required: true
+      example: "Soll ich das Licht ausschalten?"
+      selector:
+        text:
+          multiline: true
+    mode:
+      default: yesno
+      selector:
+        select:
+          options:
+            - yesno
+            - open
+            - choice
+    choices:
+      example: "Ja, Nein, Später"
+      selector:
+        text:
+          multiple: true
+    priority:
+      default: 2
+      selector:
+        number:
+          min: 0
+          max: 4
+          mode: slider
+    callback_event:
+      default: "AI_CONFIRM"
+      selector:
+        text:
+    timeout_minutes:
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 1440
+    default_answer:
+      example: "Nein"
+      selector:
+        text:
+    recipient:
+      selector:
+        entity:
+          domain: person
+    target_player:
+      selector:
+        entity:
+          domain:
+            - assist_satellite
+            - media_player
+
+acknowledge:
+  fields:
+    id:
+      required: true
+      example: "a1b2c3d4"
+      selector:
+        text:
+    answer:
+      required: true
+      example: "Ja"
+      selector:
+        text:
+    source:
+      example: "ui"
+      selector:
+        text:
+
+cancel:
+  fields:
+    id:
+      required: true
+      example: "a1b2c3d4"
+      selector:
+        text:
+    reason:
+      example: "Nicht mehr relevant"
+      selector:
+        text:

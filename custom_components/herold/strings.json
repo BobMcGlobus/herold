@@ -17,7 +17,7 @@
           "occupancy_entities": "Occupancy sensors",
           "sat_entity": "Assist satellite",
           "media_player_entity": "Media player",
-          "light_entity": "Light (P4 flash)",
+          "flash_entities": "Alarm flash (lights and scenes, P4)",
           "priority_weight": "Priority weight"
         }
       },
@@ -40,6 +40,14 @@
         "title": "Push",
         "data": {
           "mobile_app_devices": "Mobile app notify entities"
+        }
+      },
+      "chat": {
+        "title": "Chat (Telegram)",
+        "description": "Optional: Telegram delivery with inline answer buttons. The pending question helper keeps legacy open-question automations working.",
+        "data": {
+          "telegram_chat_id": "Telegram chat ID",
+          "pending_question_entity": "Pending question helper (input_text)"
         }
       },
       "dnd": {
@@ -74,6 +82,7 @@
           "rooms_menu": "Rooms (add / edit / remove)",
           "voice": "Voice (TTS, internet sensor)",
           "push": "Push (mobile app devices)",
+          "chat": "Chat (Telegram)",
           "dnd": "Do not disturb",
           "offline": "Offline behavior"
         }
@@ -97,6 +106,13 @@
         "title": "Push",
         "data": {
           "mobile_app_devices": "Mobile app notify entities"
+        }
+      },
+      "chat": {
+        "title": "Chat (Telegram)",
+        "data": {
+          "telegram_chat_id": "Telegram chat ID",
+          "pending_question_entity": "Pending question helper (input_text)"
         }
       },
       "dnd": {
@@ -129,7 +145,7 @@
           "occupancy_entities": "Occupancy sensors",
           "sat_entity": "Assist satellite",
           "media_player_entity": "Media player",
-          "light_entity": "Light (P4 flash)",
+          "flash_entities": "Alarm flash (lights and scenes, P4)",
           "priority_weight": "Priority weight"
         }
       },
@@ -146,7 +162,7 @@
           "occupancy_entities": "Occupancy sensors",
           "sat_entity": "Assist satellite",
           "media_player_entity": "Media player",
-          "light_entity": "Light (P4 flash)",
+          "flash_entities": "Alarm flash (lights and scenes, P4)",
           "priority_weight": "Priority weight"
         }
       },
@@ -172,6 +188,12 @@
     "sensor": {
       "last_delivery": {
         "name": "Last delivery"
+      },
+      "pending_count": {
+        "name": "Pending queries"
+      },
+      "last_query": {
+        "name": "Last query"
       }
     },
     "binary_sensor": {
@@ -180,6 +202,9 @@
       },
       "dnd_active": {
         "name": "DND active"
+      },
+      "any_pending": {
+        "name": "Query pending"
       }
     },
     "button": {
@@ -191,7 +216,7 @@
   "services": {
     "send": {
       "name": "Send notification",
-      "description": "Sends a notification through the Herold dispatcher (voice and push in Phase 1).",
+      "description": "Sends a fire-and-forget notification through the Herold dispatcher (voice, push and Telegram).",
       "fields": {
         "message": {
           "name": "Message",
@@ -219,11 +244,85 @@
         },
         "ttl_minutes": {
           "name": "TTL (minutes)",
-          "description": "Optional auto-expiry (used from Phase 2)."
+          "description": "Optional auto-expiry (used from a later phase)."
         },
         "callback_event": {
           "name": "Callback event",
-          "description": "Legacy callback event id. Default AI_CONFIRM fires AI_YES/AI_NO (query mode lands in Phase 2)."
+          "description": "Legacy callback event id (only meaningful for queries)."
+        }
+      }
+    },
+    "query": {
+      "name": "Ask a query",
+      "description": "Sends a question and waits for an answer via satellite conversation, Telegram buttons or the acknowledge service.",
+      "fields": {
+        "question": {
+          "name": "Question",
+          "description": "The question text."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "yesno = yes/no buttons, open = free-text answer, choice = predefined options."
+        },
+        "choices": {
+          "name": "Choices",
+          "description": "Answer options (required for mode 'choice')."
+        },
+        "priority": {
+          "name": "Priority",
+          "description": "0 = internal, 1 = todo, 2 = normal, 3 = important, 4 = alarm."
+        },
+        "callback_event": {
+          "name": "Callback event",
+          "description": "Event id for the answer. Default AI_CONFIRM fires AI_YES/AI_NO (legacy compatible); a custom id XYZ fires XYZ_YES/XYZ_NO."
+        },
+        "timeout_minutes": {
+          "name": "Timeout (minutes)",
+          "description": "How long to wait for an answer before expiring."
+        },
+        "default_answer": {
+          "name": "Default answer",
+          "description": "Used automatically when the timeout is reached."
+        },
+        "recipient": {
+          "name": "Recipient",
+          "description": "Person entity; defaults to the configured recipient."
+        },
+        "target_player": {
+          "name": "Target player",
+          "description": "Optional target that overrides room detection."
+        }
+      }
+    },
+    "acknowledge": {
+      "name": "Answer a query",
+      "description": "Resolves a pending query with an answer.",
+      "fields": {
+        "id": {
+          "name": "Query ID",
+          "description": "The id of the pending query."
+        },
+        "answer": {
+          "name": "Answer",
+          "description": "For yesno: Ja/Nein; for choice: one of the choices; for open: any text."
+        },
+        "source": {
+          "name": "Source",
+          "description": "Where the answer came from (for the answered event)."
+        }
+      }
+    },
+    "cancel": {
+      "name": "Cancel a query",
+      "description": "Cancels a pending query without firing answer events.",
+      "fields": {
+        "id": {
+          "name": "Query ID",
+          "description": "The id of the pending query."
+        },
+        "reason": {
+          "name": "Reason",
+          "description": "Optional reason, only logged."
         }
       }
     }

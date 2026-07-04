@@ -17,7 +17,7 @@
           "occupancy_entities": "Präsenzsensoren",
           "sat_entity": "Assist-Satellit",
           "media_player_entity": "Media Player",
-          "light_entity": "Licht (P4-Blinken)",
+          "flash_entities": "Alarm-Blinken (Lichter und Szenen, P4)",
           "priority_weight": "Prioritätsgewicht"
         }
       },
@@ -40,6 +40,14 @@
         "title": "Push",
         "data": {
           "mobile_app_devices": "Mobile-App-Notify-Entitäten"
+        }
+      },
+      "chat": {
+        "title": "Chat (Telegram)",
+        "description": "Optional: Telegram-Zustellung mit Inline-Antwort-Buttons. Der Pending-Question-Helper hält bestehende Automationen für offene Fragen am Laufen.",
+        "data": {
+          "telegram_chat_id": "Telegram-Chat-ID",
+          "pending_question_entity": "Pending-Question-Helper (input_text)"
         }
       },
       "dnd": {
@@ -74,6 +82,7 @@
           "rooms_menu": "Räume (hinzufügen / bearbeiten / entfernen)",
           "voice": "Sprache (TTS, Internet-Sensor)",
           "push": "Push (Mobile-App-Geräte)",
+          "chat": "Chat (Telegram)",
           "dnd": "Nicht stören",
           "offline": "Offline-Verhalten"
         }
@@ -97,6 +106,13 @@
         "title": "Push",
         "data": {
           "mobile_app_devices": "Mobile-App-Notify-Entitäten"
+        }
+      },
+      "chat": {
+        "title": "Chat (Telegram)",
+        "data": {
+          "telegram_chat_id": "Telegram-Chat-ID",
+          "pending_question_entity": "Pending-Question-Helper (input_text)"
         }
       },
       "dnd": {
@@ -129,7 +145,7 @@
           "occupancy_entities": "Präsenzsensoren",
           "sat_entity": "Assist-Satellit",
           "media_player_entity": "Media Player",
-          "light_entity": "Licht (P4-Blinken)",
+          "flash_entities": "Alarm-Blinken (Lichter und Szenen, P4)",
           "priority_weight": "Prioritätsgewicht"
         }
       },
@@ -146,7 +162,7 @@
           "occupancy_entities": "Präsenzsensoren",
           "sat_entity": "Assist-Satellit",
           "media_player_entity": "Media Player",
-          "light_entity": "Licht (P4-Blinken)",
+          "flash_entities": "Alarm-Blinken (Lichter und Szenen, P4)",
           "priority_weight": "Prioritätsgewicht"
         }
       },
@@ -172,6 +188,12 @@
     "sensor": {
       "last_delivery": {
         "name": "Letzte Zustellung"
+      },
+      "pending_count": {
+        "name": "Offene Fragen"
+      },
+      "last_query": {
+        "name": "Letzte Frage"
       }
     },
     "binary_sensor": {
@@ -180,6 +202,9 @@
       },
       "dnd_active": {
         "name": "DND aktiv"
+      },
+      "any_pending": {
+        "name": "Frage offen"
       }
     },
     "button": {
@@ -191,7 +216,7 @@
   "services": {
     "send": {
       "name": "Benachrichtigung senden",
-      "description": "Sendet eine Benachrichtigung über den Herold-Dispatcher (Sprache und Push in Phase 1).",
+      "description": "Sendet eine Fire-and-Forget-Benachrichtigung über den Herold-Dispatcher (Sprache, Push und Telegram).",
       "fields": {
         "message": {
           "name": "Nachricht",
@@ -219,11 +244,85 @@
         },
         "ttl_minutes": {
           "name": "TTL (Minuten)",
-          "description": "Optionaler automatischer Ablauf (ab Phase 2 genutzt)."
+          "description": "Optionaler automatischer Ablauf (spätere Phase)."
         },
         "callback_event": {
           "name": "Callback-Event",
-          "description": "Legacy-Callback-Event-ID. Standard AI_CONFIRM feuert AI_YES/AI_NO (Query-Modus kommt in Phase 2)."
+          "description": "Legacy-Callback-Event-ID (nur für Fragen relevant)."
+        }
+      }
+    },
+    "query": {
+      "name": "Frage stellen",
+      "description": "Stellt eine Frage und wartet auf die Antwort via Satelliten-Konversation, Telegram-Buttons oder den Acknowledge-Service.",
+      "fields": {
+        "question": {
+          "name": "Frage",
+          "description": "Der Fragetext."
+        },
+        "mode": {
+          "name": "Modus",
+          "description": "yesno = Ja/Nein-Buttons, open = Freitext-Antwort, choice = vordefinierte Optionen."
+        },
+        "choices": {
+          "name": "Antwortoptionen",
+          "description": "Antwortmöglichkeiten (erforderlich für Modus 'choice')."
+        },
+        "priority": {
+          "name": "Priorität",
+          "description": "0 = intern, 1 = Todo, 2 = normal, 3 = wichtig, 4 = Alarm."
+        },
+        "callback_event": {
+          "name": "Callback-Event",
+          "description": "Event-ID für die Antwort. Standard AI_CONFIRM feuert AI_YES/AI_NO (legacy-kompatibel); eine eigene ID XYZ feuert XYZ_YES/XYZ_NO."
+        },
+        "timeout_minutes": {
+          "name": "Timeout (Minuten)",
+          "description": "Wie lange auf eine Antwort gewartet wird, bevor die Frage abläuft."
+        },
+        "default_answer": {
+          "name": "Standard-Antwort",
+          "description": "Wird beim Erreichen des Timeouts automatisch verwendet."
+        },
+        "recipient": {
+          "name": "Empfänger",
+          "description": "Person-Entität; Standard ist der konfigurierte Empfänger."
+        },
+        "target_player": {
+          "name": "Ziel-Player",
+          "description": "Optionales Ziel, das die Raumerkennung überschreibt."
+        }
+      }
+    },
+    "acknowledge": {
+      "name": "Frage beantworten",
+      "description": "Löst eine offene Frage mit einer Antwort auf.",
+      "fields": {
+        "id": {
+          "name": "Frage-ID",
+          "description": "Die ID der offenen Frage."
+        },
+        "answer": {
+          "name": "Antwort",
+          "description": "Bei yesno: Ja/Nein; bei choice: eine der Optionen; bei open: beliebiger Text."
+        },
+        "source": {
+          "name": "Quelle",
+          "description": "Woher die Antwort stammt (für das Answered-Event)."
+        }
+      }
+    },
+    "cancel": {
+      "name": "Frage abbrechen",
+      "description": "Bricht eine offene Frage ab, ohne Antwort-Events zu feuern.",
+      "fields": {
+        "id": {
+          "name": "Frage-ID",
+          "description": "Die ID der offenen Frage."
+        },
+        "reason": {
+          "name": "Grund",
+          "description": "Optionaler Grund, wird nur geloggt."
         }
       }
     }

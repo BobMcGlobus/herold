@@ -1,8 +1,8 @@
 """Central state holder for the Herold integration.
 
 Not a DataUpdateCoordinator — Herold does not poll. The coordinator owns the
-configured rooms, the channel instances and the merged DND state, and runs
-the dispatch pipeline for outgoing notifications.
+configured rooms, the channel instances, the merged DND state, the store and
+the query manager, and runs the dispatch pipeline for outgoing notifications.
 """
 
 from __future__ import annotations
@@ -15,10 +15,18 @@ from homeassistant.core import Event, EventStateChangedData, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.util import dt as dt_util
 
-from .channels import BaseChannel, ChannelUnavailable, PushChannel, VoiceChannel
+from .channels import (
+    BaseChannel,
+    ChannelUnavailable,
+    PushChannel,
+    TelegramChannel,
+    VoiceChannel,
+)
 from .const import (
     CHANNEL_PUSH,
+    CHANNEL_TELEGRAM,
     CHANNEL_VOICE,
     CONF_ENABLE_OFFLINE_FALLBACK,
     CONF_EXTERNAL_DND_ENTITY,
@@ -31,8 +39,10 @@ from .const import (
     signal_dnd,
 )
 from .dispatcher import DispatchContext, select_channels, should_deliver
-from .models import DeliveryResult, DNDState, Notification, Room
-from .room_router import get_active_room
+from .models import DeliveryResult, DNDState, Notification, Query, Room
+from .query_manager import QueryManager
+from .room_router import select_room
+from .store import HeroldStore
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -44,7 +54,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class HeroldCoordinator:
-    """Owns configuration, rooms, channels and the dispatch pipeline."""
+    """Owns configuration, rooms, channels, store and the dispatch pipeline."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
@@ -53,12 +63,15 @@ class HeroldCoordinator:
         self.rooms: list[Room] = []
         self.channels: dict[str, BaseChannel] = {}
         self.dnd_state = DNDState()
-        self.last_notification: Notification | None = None
+        self.store = HeroldStore(hass, entry.entry_id)
+        self.query_manager = QueryManager(self)
         self.last_result: DeliveryResult | None = None
-        self._unsub_external_dnd: Callable[[], None] | None = None
+        self.last_priority: int | None = None
+        self._unsubs: list[Callable[[], None]] = []
 
     async def async_setup(self) -> None:
-        """Load rooms, initialize channels and hook up the external DND entity."""
+        """Load store and rooms, initialize channels, attach listeners."""
+        await self.store.async_load()
         self.rooms = [Room.from_dict(raw) for raw in self.config.get(CONF_ROOMS, [])]
 
         voice_offline_capable = bool(
@@ -68,6 +81,7 @@ class HeroldCoordinator:
         self.channels = {
             CHANNEL_VOICE: VoiceChannel(offline_capable=voice_offline_capable),
             CHANNEL_PUSH: PushChannel(),
+            CHANNEL_TELEGRAM: TelegramChannel(),
         }
 
         external = self.config.get(CONF_EXTERNAL_DND_ENTITY)
@@ -75,15 +89,35 @@ class HeroldCoordinator:
             self.dnd_state.external_active = self.hass.states.is_state(
                 external, STATE_ON
             )
-            self._unsub_external_dnd = async_track_state_change_event(
-                self.hass, [external], self._async_external_dnd_changed
+            self._unsubs.append(
+                async_track_state_change_event(
+                    self.hass, [external], self._async_external_dnd_changed
+                )
             )
 
+        occupancy_entities = sorted(
+            {
+                entity_id
+                for room in self.rooms
+                for entity_id in room.occupancy_entities
+            }
+        )
+        if occupancy_entities:
+            self._unsubs.append(
+                async_track_state_change_event(
+                    self.hass, occupancy_entities, self._async_occupancy_changed
+                )
+            )
+
+        await self.query_manager.async_setup()
+
     async def async_shutdown(self) -> None:
-        """Detach listeners on unload."""
-        if self._unsub_external_dnd is not None:
-            self._unsub_external_dnd()
-            self._unsub_external_dnd = None
+        """Detach listeners and flush the store on unload."""
+        await self.query_manager.async_shutdown()
+        for unsub in self._unsubs:
+            unsub()
+        self._unsubs.clear()
+        await self.store.async_flush()
 
     @property
     def internet_available(self) -> bool:
@@ -112,6 +146,12 @@ class HeroldCoordinator:
         async_dispatcher_send(self.hass, signal_dnd(self.entry.entry_id))
 
     @callback
+    def note_delivery(self, result: DeliveryResult, priority: int) -> None:
+        """Record the most recent delivery for the debug sensor."""
+        self.last_result = result
+        self.last_priority = priority
+
+    @callback
     def _async_external_dnd_changed(
         self, event: Event[EventStateChangedData]
     ) -> None:
@@ -121,9 +161,26 @@ class HeroldCoordinator:
         )
         async_dispatcher_send(self.hass, signal_dnd(self.entry.entry_id))
 
+    @callback
+    def _async_occupancy_changed(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
+        """Track room activations for conflict resolution and fallback."""
+        new_state = event.data["new_state"]
+        if new_state is None or new_state.state != STATE_ON:
+            return
+        entity_id = event.data["entity_id"]
+        now = dt_util.utcnow()
+        for room in self.rooms:
+            if entity_id in room.occupancy_entities:
+                self.store.room_last_activation[room.name] = now
+                self.store.last_known_room = room.name
+                self.store.last_room_activity = now
+        self.store.async_schedule_save()
+
     async def async_get_active_room(self) -> Room | None:
         """Return the room voice output should go to, if any."""
-        return await get_active_room(self)
+        return select_room(self)
 
     async def async_get_channel(self, name: str) -> BaseChannel:
         """Return a channel by name."""
@@ -183,7 +240,10 @@ class HeroldCoordinator:
                     },
                 )
 
-        self.last_notification = notification
-        self.last_result = result
+        self.note_delivery(result, notification.priority)
         async_dispatcher_send(self.hass, signal_delivery(self.entry.entry_id))
         return result
+
+    async def async_ask(self, query: Query) -> DeliveryResult:
+        """Run the dispatch pipeline for a query."""
+        return await self.query_manager.async_ask(query)

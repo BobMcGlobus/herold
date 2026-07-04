@@ -14,18 +14,19 @@ from ..const import (
     CONF_FALLBACK_TTS,
     CONF_PRIMARY_TTS,
     PRIORITY_ALARM,
+    QUERY_MODE_CHOICE,
 )
 from .base import BaseChannel, ChannelUnavailable
 
 if TYPE_CHECKING:
     from ..coordinator import HeroldCoordinator
-    from ..models import Notification
+    from ..models import Notification, Query
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class VoiceChannel(BaseChannel):
-    """Deliver notifications audibly in the currently occupied room."""
+    """Deliver notifications and queries audibly in the active room."""
 
     name = CHANNEL_VOICE
 
@@ -38,53 +39,25 @@ class VoiceChannel(BaseChannel):
         self, notification: Notification, coordinator: HeroldCoordinator
     ) -> None:
         """Announce via satellite or speak via TTS on a media player."""
-        hass = coordinator.hass
-        room = await coordinator.async_get_active_room()
-
-        sat_entity: str | None = None
-        media_player_entity: str | None = None
-        light_entity = room.light_entity if room else None
-
-        if notification.target_player:
-            # Explicit target overrides room detection (original script behavior).
-            if notification.target_player.startswith("assist_satellite."):
-                sat_entity = notification.target_player
-            else:
-                media_player_entity = notification.target_player
-        elif room is not None:
-            sat_entity = room.sat_entity
-            media_player_entity = room.media_player_entity
-        else:
+        outputs = await self._resolve_outputs(
+            notification.target_player, coordinator
+        )
+        if outputs is None:
             _LOGGER.debug(
                 "Voice delivery skipped for %s: no occupied voice-capable room",
                 notification.id,
             )
             return
+        sat_entity, media_player_entity, flash_entities = outputs
 
-        # P4 light flash BEFORE the voice output
-        if notification.priority == PRIORITY_ALARM and light_entity:
-            await hass.services.async_call(
-                "light",
-                "turn_on",
-                {
-                    "entity_id": light_entity,
-                    "flash": "short",
-                    "brightness": 255,
-                    "rgb_color": [255, 0, 0],
-                },
-                blocking=True,
-            )
+        if notification.priority == PRIORITY_ALARM:
+            await self._flash(coordinator, flash_entities)
 
         if sat_entity:
-            if notification.priority == PRIORITY_ALARM:
-                await hass.services.async_call(
-                    "assist_satellite",
-                    "announce",
-                    {"entity_id": sat_entity, "message": ALARM_VOICE_PREFIX},
-                    blocking=True,
-                )
-                await asyncio.sleep(ALARM_ANNOUNCE_DELAY_SECONDS)
-            await hass.services.async_call(
+            await self._alarm_preannounce(
+                coordinator, sat_entity, notification.priority
+            )
+            await coordinator.hass.services.async_call(
                 "assist_satellite",
                 "announce",
                 {"entity_id": sat_entity, "message": notification.message},
@@ -92,22 +65,123 @@ class VoiceChannel(BaseChannel):
             )
         elif media_player_entity:
             # Media-player-only room (e.g. bathroom with a Sonos Roam)
-            tts_entity = self._choose_tts_entity(coordinator)
-            await hass.services.async_call(
-                "tts",
-                "speak",
-                {
-                    "entity_id": tts_entity,
-                    "media_player_entity_id": media_player_entity,
-                    "message": notification.message,
-                },
-                blocking=True,
+            await self._speak(
+                coordinator, media_player_entity, notification.message
             )
         else:
             _LOGGER.debug(
                 "Voice delivery skipped for %s: no usable output entity",
                 notification.id,
             )
+
+    async def deliver_query(
+        self, query: Query, coordinator: HeroldCoordinator
+    ) -> None:
+        """Start a conversation on a satellite, or speak the question.
+
+        In media-player-only rooms the question is spoken via TTS (original
+        script behavior) — the answer then has to come through another
+        channel (Telegram buttons), which the dispatcher accounts for.
+        """
+        outputs = await self._resolve_outputs(query.target_player, coordinator)
+        if outputs is None:
+            _LOGGER.debug(
+                "Voice query skipped for %s: no occupied voice-capable room",
+                query.id,
+            )
+            return
+        sat_entity, media_player_entity, flash_entities = outputs
+
+        if query.priority == PRIORITY_ALARM:
+            await self._flash(coordinator, flash_entities)
+
+        if sat_entity:
+            await self._alarm_preannounce(coordinator, sat_entity, query.priority)
+            data = {"entity_id": sat_entity, "start_message": query.question}
+            if query.mode == QUERY_MODE_CHOICE and query.choices:
+                data["extra_system_prompt"] = (
+                    "The user was just asked a question with predefined "
+                    f"answer options: {', '.join(query.choices)}. Map their "
+                    "spoken reply to one of these options."
+                )
+            await coordinator.hass.services.async_call(
+                "assist_satellite", "start_conversation", data, blocking=True
+            )
+        elif media_player_entity:
+            await self._speak(coordinator, media_player_entity, query.question)
+        else:
+            _LOGGER.debug(
+                "Voice query skipped for %s: no usable output entity", query.id
+            )
+
+    async def _resolve_outputs(
+        self, target_player: str | None, coordinator: HeroldCoordinator
+    ) -> tuple[str | None, str | None, list[str]] | None:
+        """Return (sat, media_player, flash_entities) or None if no target."""
+        room = await coordinator.async_get_active_room()
+        flash_entities = room.flash_entities if room else []
+
+        if target_player:
+            # Explicit target overrides room detection (original script
+            # behavior); the active room still provides the P4 flash target.
+            if target_player.startswith("assist_satellite."):
+                return (target_player, None, flash_entities)
+            return (None, target_player, flash_entities)
+        if room is None:
+            return None
+        return (room.sat_entity, room.media_player_entity, flash_entities)
+
+    async def _flash(
+        self, coordinator: HeroldCoordinator, flash_entities: list[str]
+    ) -> None:
+        """P4 visual alarm: flash lights red, activate scenes as-is."""
+        for entity_id in flash_entities:
+            if entity_id.startswith("scene."):
+                await coordinator.hass.services.async_call(
+                    "scene", "turn_on", {"entity_id": entity_id}, blocking=True
+                )
+            else:
+                await coordinator.hass.services.async_call(
+                    "light",
+                    "turn_on",
+                    {
+                        "entity_id": entity_id,
+                        "flash": "short",
+                        "brightness": 255,
+                        "rgb_color": [255, 0, 0],
+                    },
+                    blocking=True,
+                )
+
+    async def _alarm_preannounce(
+        self, coordinator: HeroldCoordinator, sat_entity: str, priority: int
+    ) -> None:
+        """P4 warning announcement before the actual message."""
+        if priority != PRIORITY_ALARM:
+            return
+        await coordinator.hass.services.async_call(
+            "assist_satellite",
+            "announce",
+            {"entity_id": sat_entity, "message": ALARM_VOICE_PREFIX},
+            blocking=True,
+        )
+        await asyncio.sleep(ALARM_ANNOUNCE_DELAY_SECONDS)
+
+    async def _speak(
+        self, coordinator: HeroldCoordinator, media_player_entity: str, text: str
+    ) -> None:
+        """Speak text on a media player using the TTS chain."""
+        tts_entity = self._choose_tts_entity(coordinator)
+        await coordinator.hass.services.async_call(
+            "tts",
+            "speak",
+            {
+                "entity_id": tts_entity,
+                "media_player_entity_id": media_player_entity,
+                "message": text,
+            },
+            blocking=True,
+        )
 
     def _choose_tts_entity(self, coordinator: HeroldCoordinator) -> str:
         """Pick a TTS entity: primary online, fallback offline, else fail."""

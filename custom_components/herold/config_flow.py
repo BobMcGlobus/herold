@@ -31,18 +31,20 @@ from .const import (
     CONF_ENABLE_OFFLINE_QUEUE,
     CONF_EXTERNAL_DND_ENTITY,
     CONF_FALLBACK_TTS,
+    CONF_FLASH_ENTITIES,
     CONF_INTEGRATION_NAME,
     CONF_INTERNET_SENSOR,
-    CONF_LIGHT_ENTITY,
     CONF_MEDIA_PLAYER_ENTITY,
     CONF_MOBILE_APP_DEVICES,
     CONF_OCCUPANCY_ENTITIES,
+    CONF_PENDING_QUESTION_ENTITY,
     CONF_PRIMARY_TTS,
     CONF_PRIORITY_WEIGHT,
     CONF_RECIPIENT,
     CONF_ROOM_NAME,
     CONF_ROOMS,
     CONF_SAT_ENTITY,
+    CONF_TELEGRAM_CHAT_ID,
     DEFAULT_CREATE_INTERNAL_SWITCH,
     DEFAULT_ENABLE_OFFLINE_FALLBACK,
     DEFAULT_ENABLE_OFFLINE_QUEUE,
@@ -74,8 +76,8 @@ ROOM_SCHEMA = vol.Schema(
         vol.Optional(CONF_MEDIA_PLAYER_ENTITY): EntitySelector(
             EntitySelectorConfig(domain="media_player")
         ),
-        vol.Optional(CONF_LIGHT_ENTITY): EntitySelector(
-            EntitySelectorConfig(domain="light")
+        vol.Optional(CONF_FLASH_ENTITIES, default=[]): EntitySelector(
+            EntitySelectorConfig(domain=["light", "scene"], multiple=True)
         ),
         vol.Optional(
             CONF_PRIORITY_WEIGHT, default=DEFAULT_PRIORITY_WEIGHT
@@ -107,6 +109,15 @@ PUSH_SCHEMA = vol.Schema(
     }
 )
 
+CHAT_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_TELEGRAM_CHAT_ID): TextSelector(),
+        vol.Optional(CONF_PENDING_QUESTION_ENTITY): EntitySelector(
+            EntitySelectorConfig(domain="input_text")
+        ),
+    }
+)
+
 DND_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_EXTERNAL_DND_ENTITY): EntitySelector(
@@ -132,6 +143,7 @@ OFFLINE_SCHEMA = vol.Schema(
 BASIC_KEYS = (CONF_RECIPIENT, CONF_INTEGRATION_NAME)
 VOICE_KEYS = (CONF_PRIMARY_TTS, CONF_FALLBACK_TTS, CONF_INTERNET_SENSOR)
 PUSH_KEYS = (CONF_MOBILE_APP_DEVICES,)
+CHAT_KEYS = (CONF_TELEGRAM_CHAT_ID, CONF_PENDING_QUESTION_ENTITY)
 DND_KEYS = (CONF_EXTERNAL_DND_ENTITY, CONF_CREATE_INTERNAL_SWITCH)
 OFFLINE_KEYS = (CONF_ENABLE_OFFLINE_FALLBACK, CONF_ENABLE_OFFLINE_QUEUE)
 
@@ -155,7 +167,7 @@ def _normalize_room(user_input: dict[str, Any]) -> dict[str, Any]:
         CONF_OCCUPANCY_ENTITIES: list(user_input[CONF_OCCUPANCY_ENTITIES]),
         CONF_SAT_ENTITY: user_input.get(CONF_SAT_ENTITY),
         CONF_MEDIA_PLAYER_ENTITY: user_input.get(CONF_MEDIA_PLAYER_ENTITY),
-        CONF_LIGHT_ENTITY: user_input.get(CONF_LIGHT_ENTITY),
+        CONF_FLASH_ENTITIES: list(user_input.get(CONF_FLASH_ENTITIES) or []),
         CONF_PRIORITY_WEIGHT: int(
             user_input.get(CONF_PRIORITY_WEIGHT, DEFAULT_PRIORITY_WEIGHT)
         ),
@@ -163,9 +175,9 @@ def _normalize_room(user_input: dict[str, Any]) -> dict[str, Any]:
 
 
 class HeroldConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Initial setup: basics → rooms (repeatable) → voice → push → dnd → offline."""
+    """Initial setup: basics → rooms → voice → push → chat → dnd → offline."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
@@ -223,8 +235,17 @@ class HeroldConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle the push step."""
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_dnd()
+            return await self.async_step_chat()
         return self.async_show_form(step_id="push", data_schema=PUSH_SCHEMA)
+
+    async def async_step_chat(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle the chat (Telegram) step."""
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_dnd()
+        return self.async_show_form(step_id="chat", data_schema=CHAT_SCHEMA)
 
     async def async_step_dnd(
         self, user_input: dict[str, Any] | None = None
@@ -283,7 +304,15 @@ class HeroldOptionsFlow(OptionsFlow):
         """Show the section menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["basic", "rooms_menu", "voice", "push", "dnd", "offline"],
+            menu_options=[
+                "basic",
+                "rooms_menu",
+                "voice",
+                "push",
+                "chat",
+                "dnd",
+                "offline",
+            ],
         )
 
     def _async_step_section(
@@ -323,6 +352,12 @@ class HeroldOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Edit the push section."""
         return self._async_step_section("push", PUSH_SCHEMA, PUSH_KEYS, user_input)
+
+    async def async_step_chat(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit the chat (Telegram) section."""
+        return self._async_step_section("chat", CHAT_SCHEMA, CHAT_KEYS, user_input)
 
     async def async_step_dnd(
         self, user_input: dict[str, Any] | None = None

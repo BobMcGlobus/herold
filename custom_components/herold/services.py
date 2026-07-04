@@ -11,32 +11,48 @@ from homeassistant.helpers import config_validation as cv
 import voluptuous as vol
 
 from .const import (
+    ATTR_ANSWER,
     ATTR_CALLBACK_EVENT,
+    ATTR_CHOICES,
+    ATTR_DEFAULT_ANSWER,
+    ATTR_ID,
     ATTR_MESSAGE,
+    ATTR_MODE,
     ATTR_PRIORITY,
+    ATTR_QUESTION,
+    ATTR_REASON,
     ATTR_RECIPIENT,
+    ATTR_SOURCE,
     ATTR_TAG,
     ATTR_TARGET_PLAYER,
+    ATTR_TIMEOUT_MINUTES,
     ATTR_TITLE,
     ATTR_TTL_MINUTES,
     CONF_RECIPIENT,
     DEFAULT_PRIORITY,
+    DEFAULT_QUERY_TIMEOUT_MINUTES,
     DOMAIN,
+    LEGACY_DEFAULT_CALLBACK,
+    QUERY_MODE_CHOICE,
+    QUERY_MODES,
+    SERVICE_ACKNOWLEDGE,
+    SERVICE_CANCEL,
+    SERVICE_QUERY,
     SERVICE_SEND,
 )
-from .models import Notification
+from .models import Notification, Query
 
 if TYPE_CHECKING:
     from .coordinator import HeroldCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+_PRIORITY = vol.All(vol.Coerce(int), vol.Range(min=0, max=4))
+
 SEND_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_MESSAGE): cv.string,
-        vol.Optional(ATTR_PRIORITY, default=DEFAULT_PRIORITY): vol.All(
-            vol.Coerce(int), vol.Range(min=0, max=4)
-        ),
+        vol.Optional(ATTR_PRIORITY, default=DEFAULT_PRIORITY): _PRIORITY,
         vol.Optional(ATTR_RECIPIENT): cv.entity_id,
         vol.Optional(ATTR_TARGET_PLAYER): cv.entity_id,
         vol.Optional(ATTR_TITLE): cv.string,
@@ -45,6 +61,39 @@ SEND_SCHEMA = vol.Schema(
             vol.Coerce(int), vol.Range(min=0, max=1440)
         ),
         vol.Optional(ATTR_CALLBACK_EVENT): cv.string,
+    }
+)
+
+QUERY_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_QUESTION): cv.string,
+        vol.Optional(ATTR_MODE, default="yesno"): vol.In(QUERY_MODES),
+        vol.Optional(ATTR_CHOICES): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional(ATTR_PRIORITY, default=DEFAULT_PRIORITY): _PRIORITY,
+        vol.Optional(
+            ATTR_CALLBACK_EVENT, default=LEGACY_DEFAULT_CALLBACK
+        ): cv.string,
+        vol.Optional(
+            ATTR_TIMEOUT_MINUTES, default=DEFAULT_QUERY_TIMEOUT_MINUTES
+        ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
+        vol.Optional(ATTR_DEFAULT_ANSWER): cv.string,
+        vol.Optional(ATTR_RECIPIENT): cv.entity_id,
+        vol.Optional(ATTR_TARGET_PLAYER): cv.entity_id,
+    }
+)
+
+ACKNOWLEDGE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ID): cv.string,
+        vol.Required(ATTR_ANSWER): cv.string,
+        vol.Optional(ATTR_SOURCE, default="service"): cv.string,
+    }
+)
+
+CANCEL_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ID): cv.string,
+        vol.Optional(ATTR_REASON): cv.string,
     }
 )
 
@@ -58,7 +107,7 @@ def _get_coordinator(hass: HomeAssistant) -> HeroldCoordinator:
 
 
 async def _async_handle_send(call: ServiceCall) -> None:
-    """Handle herold.send (fire-and-forget in Phase 1)."""
+    """Handle herold.send (fire-and-forget)."""
     coordinator = _get_coordinator(call.hass)
     notification = Notification(
         message=call.data[ATTR_MESSAGE],
@@ -76,17 +125,64 @@ async def _async_handle_send(call: ServiceCall) -> None:
     await coordinator.async_send(notification)
 
 
+async def _async_handle_query(call: ServiceCall) -> None:
+    """Handle herold.query (a notification expecting an answer)."""
+    coordinator = _get_coordinator(call.hass)
+    mode = call.data[ATTR_MODE]
+    choices = call.data.get(ATTR_CHOICES)
+    if mode == QUERY_MODE_CHOICE and not choices:
+        raise HomeAssistantError("mode 'choice' requires the choices field")
+    query = Query(
+        question=call.data[ATTR_QUESTION],
+        mode=mode,
+        choices=choices,
+        priority=call.data[ATTR_PRIORITY],
+        callback_event=call.data[ATTR_CALLBACK_EVENT],
+        timeout_minutes=call.data[ATTR_TIMEOUT_MINUTES],
+        default_answer=call.data.get(ATTR_DEFAULT_ANSWER),
+        recipient=call.data.get(
+            ATTR_RECIPIENT, coordinator.config.get(CONF_RECIPIENT)
+        ),
+        target_player=call.data.get(ATTR_TARGET_PLAYER),
+    )
+    _LOGGER.debug("Service query: query %s (%s)", query.id, mode)
+    await coordinator.async_ask(query)
+
+
+async def _async_handle_acknowledge(call: ServiceCall) -> None:
+    """Handle herold.acknowledge (answer a pending query)."""
+    coordinator = _get_coordinator(call.hass)
+    await coordinator.query_manager.async_answer(
+        call.data[ATTR_ID], call.data[ATTR_ANSWER], call.data[ATTR_SOURCE]
+    )
+
+
+async def _async_handle_cancel(call: ServiceCall) -> None:
+    """Handle herold.cancel (drop a pending query)."""
+    coordinator = _get_coordinator(call.hass)
+    await coordinator.query_manager.async_cancel(
+        call.data[ATTR_ID], call.data.get(ATTR_REASON)
+    )
+
+
+_SERVICES = (
+    (SERVICE_SEND, _async_handle_send, SEND_SCHEMA),
+    (SERVICE_QUERY, _async_handle_query, QUERY_SCHEMA),
+    (SERVICE_ACKNOWLEDGE, _async_handle_acknowledge, ACKNOWLEDGE_SCHEMA),
+    (SERVICE_CANCEL, _async_handle_cancel, CANCEL_SCHEMA),
+)
+
+
 @callback
 def async_register_services(hass: HomeAssistant) -> None:
     """Register the herold services (idempotent)."""
-    if hass.services.has_service(DOMAIN, SERVICE_SEND):
-        return
-    hass.services.async_register(
-        DOMAIN, SERVICE_SEND, _async_handle_send, schema=SEND_SCHEMA
-    )
+    for name, handler, schema in _SERVICES:
+        if not hass.services.has_service(DOMAIN, name):
+            hass.services.async_register(DOMAIN, name, handler, schema=schema)
 
 
 @callback
 def async_unregister_services(hass: HomeAssistant) -> None:
     """Remove the herold services."""
-    hass.services.async_remove(DOMAIN, SERVICE_SEND)
+    for name, _handler, _schema in _SERVICES:
+        hass.services.async_remove(DOMAIN, name)

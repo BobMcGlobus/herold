@@ -1,5 +1,8 @@
 {
   "services": {
-    "send": "mdi:bullhorn"
+    "send": "mdi:bullhorn",
+    "query": "mdi:comment-question",
+    "acknowledge": "mdi:comment-check",
+    "cancel": "mdi:comment-remove"
   }
 }

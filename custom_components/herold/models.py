@@ -3,29 +3,43 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 from uuid import uuid4
 
 from homeassistant.const import STATE_ON
 from homeassistant.util import dt as dt_util
 
-from .const import DEFAULT_PRIORITY, DEFAULT_PRIORITY_WEIGHT
+from .const import (
+    DEFAULT_PRIORITY,
+    DEFAULT_PRIORITY_WEIGHT,
+    DEFAULT_QUERY_TIMEOUT_MINUTES,
+    LEGACY_CONF_LIGHT_ENTITY,
+    LEGACY_DEFAULT_CALLBACK,
+    QUERY_MODE_YESNO,
+    QUERY_STATUS_PENDING,
+)
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 
-def _new_notification_id() -> str:
+def _new_id() -> str:
     return uuid4().hex[:8]
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if not value:
+        return None
+    return dt_util.parse_datetime(str(value))
 
 
 @dataclass(kw_only=True)
 class Notification:
-    """A single notification travelling through the dispatcher."""
+    """A single fire-and-forget notification travelling through the dispatcher."""
 
     message: str
-    id: str = field(default_factory=_new_notification_id)
+    id: str = field(default_factory=_new_id)
     priority: int = DEFAULT_PRIORITY
     mode: Literal["info"] = "info"
     recipient: str | None = None
@@ -38,7 +52,7 @@ class Notification:
     context: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize for a future persistence store."""
+        """Serialize for the persistence store."""
         return {
             "id": self.id,
             "message": self.message,
@@ -57,7 +71,6 @@ class Notification:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Notification:
         """Deserialize from a persistence store payload."""
-        created_at = dt_util.parse_datetime(data.get("created_at") or "")
         return cls(
             id=data["id"],
             message=data["message"],
@@ -66,11 +79,90 @@ class Notification:
             recipient=data.get("recipient"),
             target_player=data.get("target_player"),
             callback_event=data.get("callback_event"),
-            created_at=created_at or dt_util.utcnow(),
+            created_at=_parse_datetime(data.get("created_at")) or dt_util.utcnow(),
             tag=data.get("tag"),
             ttl_minutes=data.get("ttl_minutes"),
             title=data.get("title"),
             context=data.get("context") or {},
+        )
+
+
+@dataclass(kw_only=True)
+class Query:
+    """A notification that expects an answer (first-class object since Phase 2)."""
+
+    question: str
+    id: str = field(default_factory=_new_id)
+    mode: str = QUERY_MODE_YESNO
+    choices: list[str] | None = None
+    priority: int = DEFAULT_PRIORITY
+    callback_event: str = LEGACY_DEFAULT_CALLBACK
+    recipient: str | None = None
+    target_player: str | None = None
+    timeout_minutes: int = DEFAULT_QUERY_TIMEOUT_MINUTES
+    default_answer: str | None = None
+    created_at: datetime = field(default_factory=dt_util.utcnow)
+    channels_delivered: list[str] = field(default_factory=list)
+    status: str = QUERY_STATUS_PENDING
+    answer: str | None = None
+    answered_at: datetime | None = None
+    answered_via: str | None = None
+
+    @property
+    def timeout_at(self) -> datetime:
+        """Return the point in time this query expires."""
+        return self.created_at + timedelta(minutes=self.timeout_minutes)
+
+    @property
+    def is_pending(self) -> bool:
+        """Return True while the query waits for an answer."""
+        return self.status == QUERY_STATUS_PENDING
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for the persistence store."""
+        return {
+            "id": self.id,
+            "question": self.question,
+            "mode": self.mode,
+            "choices": self.choices,
+            "priority": self.priority,
+            "callback_event": self.callback_event,
+            "recipient": self.recipient,
+            "target_player": self.target_player,
+            "timeout_minutes": self.timeout_minutes,
+            "default_answer": self.default_answer,
+            "created_at": self.created_at.isoformat(),
+            "channels_delivered": self.channels_delivered,
+            "status": self.status,
+            "answer": self.answer,
+            "answered_at": (
+                self.answered_at.isoformat() if self.answered_at else None
+            ),
+            "answered_via": self.answered_via,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Query:
+        """Deserialize from a persistence store payload."""
+        return cls(
+            id=data["id"],
+            question=data["question"],
+            mode=data.get("mode", QUERY_MODE_YESNO),
+            choices=data.get("choices"),
+            priority=data.get("priority", DEFAULT_PRIORITY),
+            callback_event=data.get("callback_event", LEGACY_DEFAULT_CALLBACK),
+            recipient=data.get("recipient"),
+            target_player=data.get("target_player"),
+            timeout_minutes=data.get(
+                "timeout_minutes", DEFAULT_QUERY_TIMEOUT_MINUTES
+            ),
+            default_answer=data.get("default_answer"),
+            created_at=_parse_datetime(data.get("created_at")) or dt_util.utcnow(),
+            channels_delivered=list(data.get("channels_delivered") or []),
+            status=data.get("status", QUERY_STATUS_PENDING),
+            answer=data.get("answer"),
+            answered_at=_parse_datetime(data.get("answered_at")),
+            answered_via=data.get("answered_via"),
         )
 
 
@@ -82,7 +174,7 @@ class Room:
     occupancy_entities: list[str] = field(default_factory=list)
     sat_entity: str | None = None
     media_player_entity: str | None = None
-    light_entity: str | None = None
+    flash_entities: list[str] = field(default_factory=list)
     priority_weight: int = DEFAULT_PRIORITY_WEIGHT
 
     def is_occupied(self, hass: HomeAssistant) -> bool:
@@ -107,19 +199,23 @@ class Room:
             "occupancy_entities": self.occupancy_entities,
             "sat_entity": self.sat_entity,
             "media_player_entity": self.media_player_entity,
-            "light_entity": self.light_entity,
+            "flash_entities": self.flash_entities,
             "priority_weight": self.priority_weight,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Room:
-        """Deserialize from config entry storage."""
+        """Deserialize; tolerates the pre-migration light_entity key."""
+        flash_entities = list(data.get("flash_entities") or [])
+        legacy_light = data.get(LEGACY_CONF_LIGHT_ENTITY)
+        if legacy_light and legacy_light not in flash_entities:
+            flash_entities.append(legacy_light)
         return cls(
             name=data["name"],
             occupancy_entities=list(data.get("occupancy_entities") or []),
             sat_entity=data.get("sat_entity"),
             media_player_entity=data.get("media_player_entity"),
-            light_entity=data.get("light_entity"),
+            flash_entities=flash_entities,
             priority_weight=data.get("priority_weight", DEFAULT_PRIORITY_WEIGHT),
         )
 
@@ -135,7 +231,7 @@ class DeliveryResult:
     timestamp: datetime = field(default_factory=dt_util.utcnow)
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize for a future persistence store."""
+        """Serialize for the persistence store."""
         return {
             "notification_id": self.notification_id,
             "channels_used": self.channels_used,

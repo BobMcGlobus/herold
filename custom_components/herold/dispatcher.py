@@ -3,12 +3,16 @@
 The priority rules are ported 1:1 from the original omnichannel script
 (see HEROLD_PLAN.md section 3):
 
-* P0 (internal): never user-facing — Phase 1 skips it with a log entry,
-  the real internal channel lands in Phase 3.
-* P1 (todo): only when home and not DND — Phase 1 drops it otherwise,
-  the todo channel lands in Phase 3.
+* P0 (internal): never user-facing — skipped with a log entry until the
+  internal channel lands in Phase 3.
+* P1 (todo): only when home and not DND — dropped otherwise until the todo
+  channel lands in Phase 3.
 * P2 (normal): dropped while DND is active.
 * P3 (important) / P4 (alarm): always delivered.
+
+Channel selection also follows the original script: voice when home and a
+room is active, push for P3/P4, telegram as the catch-all when the message
+would otherwise not reach the user (away, no active room, or high priority).
 """
 
 from __future__ import annotations
@@ -19,17 +23,20 @@ from typing import TYPE_CHECKING
 
 from .const import (
     CHANNEL_PUSH,
+    CHANNEL_TELEGRAM,
     CHANNEL_VOICE,
+    CONF_TELEGRAM_CHAT_ID,
     PRIORITY_IMPORTANT,
     PRIORITY_INTERNAL,
     PRIORITY_NORMAL,
     PRIORITY_TODO,
 )
+from .room_router import select_room
 
 if TYPE_CHECKING:
     from .channels.base import BaseChannel
     from .coordinator import HeroldCoordinator
-    from .models import Notification
+    from .models import Notification, Query
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,12 +52,12 @@ class DispatchContext:
 
 
 def should_deliver(
-    notification: Notification, ctx: DispatchContext
+    item: Notification | Query, ctx: DispatchContext
 ) -> tuple[bool, str]:
-    """Decide whether the notification passes the priority rules."""
-    priority = notification.priority
+    """Decide whether the notification/query passes the priority rules."""
+    priority = item.priority
     if priority == PRIORITY_INTERNAL:
-        return (False, "priority 0 (internal) is not implemented in Phase 1")
+        return (False, "priority 0 (internal) lands in Phase 3")
     if priority == PRIORITY_TODO:
         if not ctx.is_home:
             return (False, "priority 1 requires the recipient to be home")
@@ -67,7 +74,7 @@ def should_deliver(
 def select_channels(
     notification: Notification, ctx: DispatchContext
 ) -> list[BaseChannel]:
-    """Pick the channels used for this notification."""
+    """Pick the channels used for a fire-and-forget notification."""
     coordinator = ctx.coordinator
     voice = coordinator.channels[CHANNEL_VOICE]
     push = coordinator.channels[CHANNEL_PUSH]
@@ -75,7 +82,7 @@ def select_channels(
 
     voice_wanted = ctx.is_home and (
         notification.target_player is not None
-        or _has_active_voice_room(coordinator)
+        or select_room(coordinator) is not None
     )
     voice_selected = False
     if voice_wanted:
@@ -98,22 +105,87 @@ def select_channels(
         and not voice_selected
     ):
         # Voice was skipped due to offline: attempt push so the message is
-        # not silently lost. Phase 2 replaces this with the offline queue.
+        # not silently lost. The offline queue will replace this later.
         selected.append(push)
+
+    # Telegram catch-all (original script rule): high priority, away from
+    # home, or no voice target reached.
+    if (
+        _telegram_configured(coordinator)
+        and ctx.internet_available
+        and (
+            notification.priority >= PRIORITY_IMPORTANT
+            or not ctx.is_home
+            or not voice_selected
+        )
+    ):
+        selected.append(coordinator.channels[CHANNEL_TELEGRAM])
 
     if push in selected and not ctx.internet_available:
         _LOGGER.debug(
             "Push selected for %s while offline; delivery will likely fail "
-            "(offline queue lands in Phase 2)",
+            "(offline queue lands in a later phase)",
             notification.id,
         )
 
     return selected
 
 
-def _has_active_voice_room(coordinator: HeroldCoordinator) -> bool:
-    """Return True if any occupied room can deliver voice."""
-    return any(
-        room.is_occupied(coordinator.hass) and room.can_deliver_voice()
-        for room in coordinator.rooms
+def select_query_channels(
+    query: Query, ctx: DispatchContext
+) -> list[BaseChannel]:
+    """Pick the channels used for a query (a message expecting an answer)."""
+    coordinator = ctx.coordinator
+    voice = coordinator.channels[CHANNEL_VOICE]
+    push = coordinator.channels[CHANNEL_PUSH]
+    selected: list[BaseChannel] = []
+
+    # Voice: satellites can capture the answer via conversation; media-player
+    # rooms only speak the question (the answer must come via Telegram).
+    answerable_by_voice = False
+    voice_wanted = False
+    if ctx.is_home:
+        if query.target_player is not None:
+            voice_wanted = True
+            answerable_by_voice = query.target_player.startswith(
+                "assist_satellite."
+            )
+        else:
+            room = select_room(coordinator)
+            if room is not None:
+                voice_wanted = True
+                answerable_by_voice = room.supports_query()
+
+    if voice_wanted:
+        if ctx.internet_available or voice.offline_capable:
+            selected.append(voice)
+        else:
+            answerable_by_voice = False
+            _LOGGER.debug(
+                "Voice query skipped for %s: offline and no offline fallback",
+                query.id,
+            )
+
+    if query.priority >= PRIORITY_IMPORTANT:
+        selected.append(push)
+
+    # Telegram carries the answer buttons whenever voice cannot capture the
+    # answer, plus for high priority or away — mirrors the original script.
+    if (
+        _telegram_configured(coordinator)
+        and ctx.internet_available
+        and (
+            query.priority >= PRIORITY_IMPORTANT
+            or not ctx.is_home
+            or not answerable_by_voice
+        )
+    ):
+        selected.append(coordinator.channels[CHANNEL_TELEGRAM])
+
+    return selected
+
+
+def _telegram_configured(coordinator: HeroldCoordinator) -> bool:
+    return bool(coordinator.config.get(CONF_TELEGRAM_CHAT_ID)) and (
+        CHANNEL_TELEGRAM in coordinator.channels
     )

@@ -1,6 +1,7 @@
 {
   "domain": "herold",
   "name": "Herold",
+  "after_dependencies": ["telegram_bot", "input_text"],
   "codeowners": ["@BobMcGlobus"],
   "config_flow": true,
   "dependencies": [
@@ -15,5 +16,5 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/BobMcGlobus/herold/issues",
   "requirements": [],
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

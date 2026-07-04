@@ -9,7 +9,7 @@ from homeassistant.exceptions import HomeAssistantError
 
 if TYPE_CHECKING:
     from ..coordinator import HeroldCoordinator
-    from ..models import Notification
+    from ..models import Notification, Query
 
 
 class ChannelUnavailable(HomeAssistantError):
@@ -27,6 +27,12 @@ class BaseChannel(ABC):
         self, notification: Notification, coordinator: HeroldCoordinator
     ) -> None:
         """Deliver the notification. Raise ChannelUnavailable on hard failure."""
+
+    async def deliver_query(
+        self, query: Query, coordinator: HeroldCoordinator
+    ) -> None:
+        """Deliver a query (a notification expecting an answer)."""
+        raise ChannelUnavailable(f"Channel {self.name} cannot deliver queries")
 
     async def is_available(self, coordinator: HeroldCoordinator) -> bool:
         """Return True if the channel can currently be used."""
