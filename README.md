@@ -64,7 +64,8 @@ Alle Sektionen sind später über die Integrations-Optionen editierbar; Räume k
 | Rate-Limiting + P2-Aggregation (Anti-Spam) | ✅ Phase 4 |
 | DND-Sessions (`until`, `until_home`) | ✅ Phase 4 |
 | Benachrichtigungs-Vorlagen mit Jinja-Platzhaltern | ✅ Phase 4 |
-| Tests, Lovelace Card, Release-Polish | 🔜 Phase 5 |
+| pytest-Suite (Dispatcher, Router, Legacy-Kompat, Limiter, …) | ✅ Phase 5 |
+| Lovelace Card, Offline-Queue, Multi-User | 🔜 Backlog |
 
 Die vollständige Roadmap steht in [HEROLD_PLAN.md](HEROLD_PLAN.md).
 

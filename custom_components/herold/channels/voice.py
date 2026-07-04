@@ -43,11 +43,9 @@ class VoiceChannel(BaseChannel):
             notification.target_player, coordinator
         )
         if outputs is None:
-            _LOGGER.debug(
-                "Voice delivery skipped for %s: no occupied voice-capable room",
-                notification.id,
-            )
-            return
+            # Raise instead of silently skipping so the delivery result
+            # records the miss (visible in the last_delivery sensor errors).
+            raise ChannelUnavailable("No occupied voice-capable room")
         sat_entity, media_player_entity, flash_entities = outputs
 
         if notification.priority == PRIORITY_ALARM:
@@ -69,10 +67,7 @@ class VoiceChannel(BaseChannel):
                 coordinator, media_player_entity, notification.message
             )
         else:
-            _LOGGER.debug(
-                "Voice delivery skipped for %s: no usable output entity",
-                notification.id,
-            )
+            raise ChannelUnavailable("Active room has no usable output entity")
 
     async def deliver_query(
         self, query: Query, coordinator: HeroldCoordinator
@@ -85,11 +80,7 @@ class VoiceChannel(BaseChannel):
         """
         outputs = await self._resolve_outputs(query.target_player, coordinator)
         if outputs is None:
-            _LOGGER.debug(
-                "Voice query skipped for %s: no occupied voice-capable room",
-                query.id,
-            )
-            return
+            raise ChannelUnavailable("No occupied voice-capable room")
         sat_entity, media_player_entity, flash_entities = outputs
 
         if query.priority == PRIORITY_ALARM:
@@ -110,9 +101,7 @@ class VoiceChannel(BaseChannel):
         elif media_player_entity:
             await self._speak(coordinator, media_player_entity, query.question)
         else:
-            _LOGGER.debug(
-                "Voice query skipped for %s: no usable output entity", query.id
-            )
+            raise ChannelUnavailable("Active room has no usable output entity")
 
     async def _resolve_outputs(
         self, target_player: str | None, coordinator: HeroldCoordinator
