@@ -7,6 +7,7 @@ send:
         text:
           multiline: true
     priority:
+      required: true
       default: 2
       selector:
         number:
@@ -48,6 +49,7 @@ query:
         text:
           multiline: true
     mode:
+      required: true
       default: yesno
       selector:
         select:
@@ -61,6 +63,7 @@ query:
         text:
           multiple: true
     priority:
+      required: true
       default: 2
       selector:
         number:
@@ -120,3 +123,55 @@ cancel:
       example: "Nicht mehr relevant"
       selector:
         text:
+
+schedule:
+  fields:
+    scheduled_for:
+      required: true
+      example: "+1h30m"
+      selector:
+        text:
+    message:
+      required: true
+      example: "Ofen vorheizen nicht vergessen"
+      selector:
+        text:
+          multiline: true
+    priority:
+      required: true
+      default: 2
+      selector:
+        number:
+          min: 0
+          max: 4
+          mode: slider
+    recipient:
+      selector:
+        entity:
+          domain: person
+    target_player:
+      selector:
+        entity:
+          domain:
+            - assist_satellite
+            - media_player
+    title:
+      selector:
+        text:
+    tag:
+      selector:
+        text:
+
+remind_self:
+  fields:
+    when:
+      required: true
+      example: "+30m"
+      selector:
+        text:
+    instruction:
+      required: true
+      example: "Frage den User via herold.query: Wie ist der Kuchen geworden?"
+      selector:
+        text:
+          multiline: true

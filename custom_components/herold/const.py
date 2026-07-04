@@ -27,9 +27,13 @@ QUERY_STATUS_ANSWERED: Final = "answered"
 QUERY_STATUS_EXPIRED: Final = "expired"
 QUERY_STATUS_CANCELLED: Final = "cancelled"
 
-# Canonical yes/no answers (German — user facing, also used by LLM tools later)
+# Canonical yes/no answers (German — user facing, also used by LLM tools)
 ANSWER_YES: Final = "Ja"
 ANSWER_NO: Final = "Nein"
+
+# Todo item status values (mirror homeassistant.components.todo)
+TODO_STATUS_OPEN: Final = "needs_action"
+TODO_STATUS_DONE: Final = "completed"
 
 # Configuration keys
 CONF_INTEGRATION_NAME: Final = "integration_name"
@@ -51,6 +55,8 @@ CONF_EXTERNAL_DND_ENTITY: Final = "external_dnd_entity"
 CONF_CREATE_INTERNAL_SWITCH: Final = "create_internal_switch"
 CONF_ENABLE_OFFLINE_FALLBACK: Final = "enable_offline_fallback"
 CONF_ENABLE_OFFLINE_QUEUE: Final = "enable_offline_queue"
+CONF_P0_AGENT_ID: Final = "p0_agent_id"
+CONF_P0_FALLBACK_AGENT_ID: Final = "p0_fallback_agent_id"
 
 # Legacy config key (config entry version 1, migrated to flash_entities)
 LEGACY_CONF_LIGHT_ENTITY: Final = "light_entity"
@@ -67,16 +73,31 @@ DEFAULT_QUERY_TIMEOUT_MINUTES: Final = 60
 # Room router: how long a last-known room stays a valid voice target
 LAST_KNOWN_ROOM_TTL_MINUTES: Final = 15
 
+# Scheduler: missed deliveries within this window still fire after a reboot
+SCHEDULE_GRACE_MINUTES: Final = 5
+
+# P0 anti-runaway: max internal triggers per rolling hour
+P0_RATE_LIMIT_PER_HOUR: Final = 20
+
+# Prefix marking conversation.process calls as internal self-callbacks.
+# The LLM prompt template should explain: execute silently, do not reply
+# to the user.
+HEROLD_INTERNAL_PREFIX: Final = "[HEROLD_INTERNAL]"
+
 # Channel names
 CHANNEL_VOICE: Final = "voice"
 CHANNEL_PUSH: Final = "push"
 CHANNEL_TELEGRAM: Final = "telegram"
+CHANNEL_INTERNAL: Final = "internal"
+CHANNEL_TODO: Final = "todo"
 
 # Fired events
 EVENT_DELIVERED: Final = "herold_delivered"
 EVENT_ANSWERED: Final = "herold_answered"
 EVENT_ESCALATED: Final = "herold_escalated"
 EVENT_EXPIRED: Final = "herold_expired"
+EVENT_SCHEDULED: Final = "herold_scheduled"
+EVENT_INTERNAL_TRIGGERED: Final = "herold_internal_triggered"
 
 # Legacy compatibility with the original omnichannel script
 LEGACY_DEFAULT_CALLBACK: Final = "AI_CONFIRM"
@@ -90,6 +111,8 @@ SERVICE_SEND: Final = "send"
 SERVICE_QUERY: Final = "query"
 SERVICE_ACKNOWLEDGE: Final = "acknowledge"
 SERVICE_CANCEL: Final = "cancel"
+SERVICE_SCHEDULE: Final = "schedule"
+SERVICE_REMIND_SELF: Final = "remind_self"
 
 ATTR_MESSAGE: Final = "message"
 ATTR_PRIORITY: Final = "priority"
@@ -108,6 +131,9 @@ ATTR_ID: Final = "id"
 ATTR_ANSWER: Final = "answer"
 ATTR_SOURCE: Final = "source"
 ATTR_REASON: Final = "reason"
+ATTR_SCHEDULED_FOR: Final = "scheduled_for"
+ATTR_WHEN: Final = "when"
+ATTR_INSTRUCTION: Final = "instruction"
 
 # Voice channel behavior (ported from the original script)
 ALARM_VOICE_PREFIX: Final = "ACHTUNG! KRITISCHE MELDUNG!"
@@ -129,3 +155,13 @@ def signal_dnd(entry_id: str) -> str:
 def signal_query(entry_id: str) -> str:
     """Dispatcher signal fired when any query state changed."""
     return f"{DOMAIN}_{entry_id}_query"
+
+
+def signal_schedule(entry_id: str) -> str:
+    """Dispatcher signal fired when the schedule list changed."""
+    return f"{DOMAIN}_{entry_id}_schedule"
+
+
+def signal_todo(entry_id: str) -> str:
+    """Dispatcher signal fired when the todo inbox changed."""
+    return f"{DOMAIN}_{entry_id}_todo"

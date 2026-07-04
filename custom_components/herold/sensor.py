@@ -8,7 +8,7 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import DOMAIN, signal_delivery, signal_query
+from .const import DOMAIN, signal_delivery, signal_query, signal_schedule
 from .entity import HeroldEntity
 
 if TYPE_CHECKING:
@@ -31,6 +31,7 @@ async def async_setup_entry(
             HeroldLastDeliverySensor(coordinator),
             HeroldPendingCountSensor(coordinator),
             HeroldLastQuerySensor(coordinator),
+            HeroldScheduledCountSensor(coordinator),
         ]
     )
 
@@ -160,4 +161,37 @@ class HeroldLastQuerySensor(HeroldSignalSensor):
             "created_at": query.created_at.isoformat(),
             "timeout_at": query.timeout_at.isoformat(),
             "channels_delivered": query.channels_delivered,
+        }
+
+
+class HeroldScheduledCountSensor(HeroldSignalSensor):
+    """Number of deferred notifications (incl. P0 self-reminders)."""
+
+    _attr_translation_key = "scheduled_count"
+    _attr_icon = "mdi:calendar-clock"
+    _attr_native_unit_of_measurement = "schedules"
+    _signal = staticmethod(signal_schedule)
+
+    def __init__(self, coordinator: HeroldCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_scheduled_count"
+
+    @property
+    def native_value(self) -> int:
+        """Return the number of pending schedules."""
+        return len(self.coordinator.scheduler.pending)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """List the pending schedules."""
+        return {
+            "schedules": [
+                {
+                    "id": schedule.id,
+                    "scheduled_for": schedule.scheduled_for.isoformat(),
+                    "message": schedule.payload.get("message"),
+                    "priority": schedule.payload.get("priority"),
+                }
+                for schedule in self.coordinator.scheduler.pending
+            ]
         }

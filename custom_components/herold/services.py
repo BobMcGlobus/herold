@@ -16,31 +16,38 @@ from .const import (
     ATTR_CHOICES,
     ATTR_DEFAULT_ANSWER,
     ATTR_ID,
+    ATTR_INSTRUCTION,
     ATTR_MESSAGE,
     ATTR_MODE,
     ATTR_PRIORITY,
     ATTR_QUESTION,
     ATTR_REASON,
     ATTR_RECIPIENT,
+    ATTR_SCHEDULED_FOR,
     ATTR_SOURCE,
     ATTR_TAG,
     ATTR_TARGET_PLAYER,
     ATTR_TIMEOUT_MINUTES,
     ATTR_TITLE,
     ATTR_TTL_MINUTES,
+    ATTR_WHEN,
     CONF_RECIPIENT,
     DEFAULT_PRIORITY,
     DEFAULT_QUERY_TIMEOUT_MINUTES,
     DOMAIN,
     LEGACY_DEFAULT_CALLBACK,
+    PRIORITY_INTERNAL,
     QUERY_MODE_CHOICE,
     QUERY_MODES,
     SERVICE_ACKNOWLEDGE,
     SERVICE_CANCEL,
     SERVICE_QUERY,
+    SERVICE_REMIND_SELF,
+    SERVICE_SCHEDULE,
     SERVICE_SEND,
 )
-from .models import Notification, Query
+from .models import Notification, Query, Schedule
+from .scheduler import parse_when
 
 if TYPE_CHECKING:
     from .coordinator import HeroldCoordinator
@@ -94,6 +101,25 @@ CANCEL_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_ID): cv.string,
         vol.Optional(ATTR_REASON): cv.string,
+    }
+)
+
+SCHEDULE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_SCHEDULED_FOR): cv.string,
+        vol.Required(ATTR_MESSAGE): cv.string,
+        vol.Optional(ATTR_PRIORITY, default=DEFAULT_PRIORITY): _PRIORITY,
+        vol.Optional(ATTR_RECIPIENT): cv.entity_id,
+        vol.Optional(ATTR_TARGET_PLAYER): cv.entity_id,
+        vol.Optional(ATTR_TITLE): cv.string,
+        vol.Optional(ATTR_TAG): cv.string,
+    }
+)
+
+REMIND_SELF_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_WHEN): cv.string,
+        vol.Required(ATTR_INSTRUCTION): cv.string,
     }
 )
 
@@ -158,11 +184,52 @@ async def _async_handle_acknowledge(call: ServiceCall) -> None:
 
 
 async def _async_handle_cancel(call: ServiceCall) -> None:
-    """Handle herold.cancel (drop a pending query)."""
+    """Handle herold.cancel (drop a pending query or schedule)."""
     coordinator = _get_coordinator(call.hass)
-    await coordinator.query_manager.async_cancel(
-        call.data[ATTR_ID], call.data.get(ATTR_REASON)
+    item_id = call.data[ATTR_ID]
+    query = coordinator.query_manager.queries.get(item_id)
+    if query is not None and query.is_pending:
+        await coordinator.query_manager.async_cancel(
+            item_id, call.data.get(ATTR_REASON)
+        )
+        return
+    if await coordinator.scheduler.async_cancel(item_id):
+        return
+    raise HomeAssistantError(f"No pending query or schedule with id {item_id}")
+
+
+async def _async_handle_schedule(call: ServiceCall) -> None:
+    """Handle herold.schedule (deferred notification)."""
+    coordinator = _get_coordinator(call.hass)
+    scheduled_for = parse_when(call.data[ATTR_SCHEDULED_FOR])
+    payload = {
+        "message": call.data[ATTR_MESSAGE],
+        "priority": call.data[ATTR_PRIORITY],
+        "recipient": call.data.get(
+            ATTR_RECIPIENT, coordinator.config.get(CONF_RECIPIENT)
+        ),
+        "target_player": call.data.get(ATTR_TARGET_PLAYER),
+        "title": call.data.get(ATTR_TITLE),
+        "tag": call.data.get(ATTR_TAG),
+    }
+    schedule = Schedule(scheduled_for=scheduled_for, payload=payload)
+    _LOGGER.debug("Service schedule: %s at %s", schedule.id, scheduled_for)
+    await coordinator.scheduler.async_add(schedule)
+
+
+async def _async_handle_remind_self(call: ServiceCall) -> None:
+    """Handle herold.remind_self (P0 convenience wrapper for schedule)."""
+    coordinator = _get_coordinator(call.hass)
+    scheduled_for = parse_when(call.data[ATTR_WHEN])
+    schedule = Schedule(
+        scheduled_for=scheduled_for,
+        payload={
+            "message": call.data[ATTR_INSTRUCTION],
+            "priority": PRIORITY_INTERNAL,
+        },
     )
+    _LOGGER.debug("Service remind_self: %s at %s", schedule.id, scheduled_for)
+    await coordinator.scheduler.async_add(schedule)
 
 
 _SERVICES = (
@@ -170,6 +237,8 @@ _SERVICES = (
     (SERVICE_QUERY, _async_handle_query, QUERY_SCHEMA),
     (SERVICE_ACKNOWLEDGE, _async_handle_acknowledge, ACKNOWLEDGE_SCHEMA),
     (SERVICE_CANCEL, _async_handle_cancel, CANCEL_SCHEMA),
+    (SERVICE_SCHEDULE, _async_handle_schedule, SCHEDULE_SCHEMA),
+    (SERVICE_REMIND_SELF, _async_handle_remind_self, REMIND_SELF_SCHEMA),
 )
 
 

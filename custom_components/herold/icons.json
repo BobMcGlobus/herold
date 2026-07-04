@@ -3,6 +3,8 @@
     "send": "mdi:bullhorn",
     "query": "mdi:comment-question",
     "acknowledge": "mdi:comment-check",
-    "cancel": "mdi:comment-remove"
+    "cancel": "mdi:comment-remove",
+    "schedule": "mdi:calendar-clock",
+    "remind_self": "mdi:robot"
   }
 }

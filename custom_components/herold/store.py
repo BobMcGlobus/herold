@@ -25,6 +25,8 @@ class HeroldStore:
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}"
         )
         self.queries: dict[str, dict[str, Any]] = {}
+        self.schedules: dict[str, dict[str, Any]] = {}
+        self.todo_items: list[dict[str, Any]] = []
         self.last_known_room: str | None = None
         self.last_room_activity: datetime | None = None
         self.room_last_activation: dict[str, datetime] = {}
@@ -33,6 +35,8 @@ class HeroldStore:
         """Load persisted state from disk."""
         data = await self._store.async_load() or {}
         self.queries = data.get("queries") or {}
+        self.schedules = data.get("schedules") or {}
+        self.todo_items = data.get("todo_items") or []
         self.last_known_room = data.get("last_known_room")
         raw_activity = data.get("last_room_activity")
         self.last_room_activity = (
@@ -56,6 +60,8 @@ class HeroldStore:
     def _data_to_save(self) -> dict[str, Any]:
         return {
             "queries": self.queries,
+            "schedules": self.schedules,
+            "todo_items": self.todo_items,
             "last_known_room": self.last_known_room,
             "last_room_activity": (
                 self.last_room_activity.isoformat()

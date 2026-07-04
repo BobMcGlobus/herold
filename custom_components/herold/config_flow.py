@@ -37,6 +37,8 @@ from .const import (
     CONF_MEDIA_PLAYER_ENTITY,
     CONF_MOBILE_APP_DEVICES,
     CONF_OCCUPANCY_ENTITIES,
+    CONF_P0_AGENT_ID,
+    CONF_P0_FALLBACK_AGENT_ID,
     CONF_PENDING_QUESTION_ENTITY,
     CONF_PRIMARY_TTS,
     CONF_PRIORITY_WEIGHT,
@@ -118,6 +120,17 @@ CHAT_SCHEMA = vol.Schema(
     }
 )
 
+LLM_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_P0_AGENT_ID): EntitySelector(
+            EntitySelectorConfig(domain="conversation")
+        ),
+        vol.Optional(CONF_P0_FALLBACK_AGENT_ID): EntitySelector(
+            EntitySelectorConfig(domain="conversation")
+        ),
+    }
+)
+
 DND_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_EXTERNAL_DND_ENTITY): EntitySelector(
@@ -144,6 +157,7 @@ BASIC_KEYS = (CONF_RECIPIENT, CONF_INTEGRATION_NAME)
 VOICE_KEYS = (CONF_PRIMARY_TTS, CONF_FALLBACK_TTS, CONF_INTERNET_SENSOR)
 PUSH_KEYS = (CONF_MOBILE_APP_DEVICES,)
 CHAT_KEYS = (CONF_TELEGRAM_CHAT_ID, CONF_PENDING_QUESTION_ENTITY)
+LLM_KEYS = (CONF_P0_AGENT_ID, CONF_P0_FALLBACK_AGENT_ID)
 DND_KEYS = (CONF_EXTERNAL_DND_ENTITY, CONF_CREATE_INTERNAL_SWITCH)
 OFFLINE_KEYS = (CONF_ENABLE_OFFLINE_FALLBACK, CONF_ENABLE_OFFLINE_QUEUE)
 
@@ -244,8 +258,17 @@ class HeroldConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle the chat (Telegram) step."""
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_dnd()
+            return await self.async_step_llm()
         return self.async_show_form(step_id="chat", data_schema=CHAT_SCHEMA)
+
+    async def async_step_llm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle the LLM (P0 agents) step."""
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_dnd()
+        return self.async_show_form(step_id="llm", data_schema=LLM_SCHEMA)
 
     async def async_step_dnd(
         self, user_input: dict[str, Any] | None = None
@@ -310,6 +333,7 @@ class HeroldOptionsFlow(OptionsFlow):
                 "voice",
                 "push",
                 "chat",
+                "llm",
                 "dnd",
                 "offline",
             ],
@@ -358,6 +382,12 @@ class HeroldOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Edit the chat (Telegram) section."""
         return self._async_step_section("chat", CHAT_SCHEMA, CHAT_KEYS, user_input)
+
+    async def async_step_llm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit the LLM (P0 agents) section."""
+        return self._async_step_section("llm", LLM_SCHEMA, LLM_KEYS, user_input)
 
     async def async_step_dnd(
         self, user_input: dict[str, Any] | None = None

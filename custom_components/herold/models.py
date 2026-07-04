@@ -167,6 +167,36 @@ class Query:
 
 
 @dataclass(kw_only=True)
+class Schedule:
+    """A deferred notification (herold.schedule / herold.remind_self)."""
+
+    scheduled_for: datetime
+    payload: dict[str, Any]
+    id: str = field(default_factory=_new_id)
+    created_at: datetime = field(default_factory=dt_util.utcnow)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for the persistence store."""
+        return {
+            "id": self.id,
+            "scheduled_for": self.scheduled_for.isoformat(),
+            "payload": self.payload,
+            "created_at": self.created_at.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Schedule:
+        """Deserialize from a persistence store payload."""
+        return cls(
+            id=data["id"],
+            scheduled_for=_parse_datetime(data["scheduled_for"])
+            or dt_util.utcnow(),
+            payload=data.get("payload") or {},
+            created_at=_parse_datetime(data.get("created_at")) or dt_util.utcnow(),
+        )
+
+
+@dataclass(kw_only=True)
 class Room:
     """A configured room with occupancy detection and voice outputs."""
 

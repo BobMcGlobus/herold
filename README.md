@@ -55,8 +55,11 @@ Alle Sektionen sind später über die Integrations-Optionen editierbar; Räume k
 | Last-Known-Room-Fallback (TTL 15 min) | ✅ Phase 2 |
 | P4 Alarm-Blinken: mehrere Lichter und Szenen pro Raum | ✅ Phase 2 |
 | Pending-Sensoren (`pending_count`, `last_query`, `any_pending`) | ✅ Phase 2 |
-| P0 Self-Callback, Scheduler, LLM-Tools, Todo | 🔜 Phase 3 |
-| Templates, Rate-Limiting, DND-Sessions | 🔜 Phase 4 |
+| `herold.schedule` + `herold.remind_self` (persistiert über Neustarts) | ✅ Phase 3 |
+| P0 Internal Channel (LLM-Self-Callback via `conversation.process`) | ✅ Phase 3 |
+| Native LLM-Tools (`list_pending`, `acknowledge`, `answer_query`, `remind_self`) | ✅ Phase 3 |
+| Todo-Inbox `todo.herold_eingang` für P1-Benachrichtigungen | ✅ Phase 3 |
+| Templates, Rate-Limiting, DND-Sessions, Escalation | 🔜 Phase 4 |
 
 Die vollständige Roadmap steht in [HEROLD_PLAN.md](HEROLD_PLAN.md).
 
@@ -90,12 +93,37 @@ data:
 
 Antwortwege: Satelliten-Konversation (`start_conversation`), Telegram-Inline-Buttons, Freitext im Telegram-Chat (open), oder `herold.acknowledge` (id + answer). Offene Fragen überleben HA-Neustarts. Bei Antwort feuert `herold_answered` mit strukturiertem Payload — bei yesno zusätzlich das Legacy-Event (`AI_YES`/`AI_NO` bzw. `<custom>_YES`/`_NO`).
 
+## Services: `herold.schedule` & `herold.remind_self`
+
+```yaml
+service: herold.schedule
+data:
+  scheduled_for: "+1h30m"       # auch "18:00" oder ISO-Datum
+  message: "Ofen vorheizen nicht vergessen"
+  priority: 2
+```
+
+```yaml
+service: herold.remind_self     # P0-Convenience für den Assistenten
+data:
+  when: "+30m"
+  instruction: "Frage den User via herold.query: Wie ist der Kuchen geworden?"
+```
+
+Geplante Benachrichtigungen überleben Neustarts; während einer Downtime verpasste Zustellungen werden innerhalb von 5 Minuten nachgeholt, ältere als `herold_expired` markiert. P0-Instruktionen laufen mit `[HEROLD_INTERNAL]`-Prefix durch den konfigurierten Conversation-Agent (Optionen → LLM), mit Fallback-Agent und Anti-Runaway-Limit (max. 20/Stunde).
+
+## LLM-Tools
+
+Herold registriert eine LLM-API namens **Herold** — aktivierbar pro Conversation-Agent unter *Sprachassistenten → Agent → LLM-APIs*. Tools: `herold_list_pending` („was ist neu?"), `herold_acknowledge` (Todo erledigt), `herold_answer_query` (Antwort auf offene Frage, inkl. Fuzzy-Matching), `herold_remind_self` (zeitversetzte Aufgaben).
+
+**Prompt-Template-Ergänzung für den Agent:** *„Nachrichten mit [HEROLD_INTERNAL] sind interne Reminder von dir selbst. Führe die Anweisung stumm aus, antworte nicht dem User."*
+
 ### Prioritätsmodell
 
 | Prio | Name | Verhalten |
 |---|---|---|
-| 0 | Intern | Wird geskippt (LLM-Self-Callback kommt in Phase 3) |
-| 1 | Todo | Nur wenn zuhause & kein DND (Todo-Liste kommt in Phase 3) |
+| 0 | Intern | LLM-Self-Callback via `conversation.process`, nie user-facing |
+| 1 | Todo | Landet still in `todo.herold_eingang` |
 | 2 | Normal | Voice wenn zuhause, sonst Push + Telegram; blockiert bei DND |
 | 3 | Wichtig | Voice + Push + Telegram, ignoriert DND |
 | 4 | Alarm | Warn-Durchsage + Alarm-Blinken + Critical Push + Telegram, ignoriert DND |
@@ -115,7 +143,7 @@ Herold ist als Drop-in-Nachfolger des Omnichannel-Communicator-Scripts konzipier
 ./scripts/setup-dev.sh /pfad/zu/ha-config   # symlinkt die Integration
 ```
 
-Manuelle Testfälle: [PHASE_1_TESTPLAN.md](PHASE_1_TESTPLAN.md) · [PHASE_2_TESTPLAN.md](PHASE_2_TESTPLAN.md)
+Manuelle Testfälle: [PHASE_1_TESTPLAN.md](PHASE_1_TESTPLAN.md) · [PHASE_2_TESTPLAN.md](PHASE_2_TESTPLAN.md) · [PHASE_3_TESTPLAN.md](PHASE_3_TESTPLAN.md)
 
 ## Lizenz
 

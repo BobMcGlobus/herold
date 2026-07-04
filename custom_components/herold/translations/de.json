@@ -50,6 +50,14 @@
           "pending_question_entity": "Pending-Question-Helper (input_text)"
         }
       },
+      "llm": {
+        "title": "LLM (interne Erinnerungen)",
+        "description": "Optional: Conversation-Agents, die P0-Selbsterinnerungen (herold.remind_self) ausführen. Der Fallback-Agent übernimmt, wenn der primäre fehlschlägt, z.B. ein lokaler Ollama bei Offline.",
+        "data": {
+          "p0_agent_id": "P0-Conversation-Agent",
+          "p0_fallback_agent_id": "P0-Fallback-Agent"
+        }
+      },
       "dnd": {
         "title": "Nicht stören",
         "data": {
@@ -83,6 +91,7 @@
           "voice": "Sprache (TTS, Internet-Sensor)",
           "push": "Push (Mobile-App-Geräte)",
           "chat": "Chat (Telegram)",
+          "llm": "LLM (interne Erinnerungen)",
           "dnd": "Nicht stören",
           "offline": "Offline-Verhalten"
         }
@@ -113,6 +122,13 @@
         "data": {
           "telegram_chat_id": "Telegram-Chat-ID",
           "pending_question_entity": "Pending-Question-Helper (input_text)"
+        }
+      },
+      "llm": {
+        "title": "LLM (interne Erinnerungen)",
+        "data": {
+          "p0_agent_id": "P0-Conversation-Agent",
+          "p0_fallback_agent_id": "P0-Fallback-Agent"
         }
       },
       "dnd": {
@@ -194,6 +210,14 @@
       },
       "last_query": {
         "name": "Letzte Frage"
+      },
+      "scheduled_count": {
+        "name": "Geplante Benachrichtigungen"
+      }
+    },
+    "todo": {
+      "inbox": {
+        "name": "Eingang"
       }
     },
     "binary_sensor": {
@@ -313,16 +337,64 @@
       }
     },
     "cancel": {
-      "name": "Frage abbrechen",
-      "description": "Bricht eine offene Frage ab, ohne Antwort-Events zu feuern.",
+      "name": "Frage oder Zeitplan abbrechen",
+      "description": "Bricht eine offene Frage oder eine geplante Benachrichtigung ab, ohne Antwort-Events zu feuern.",
       "fields": {
         "id": {
-          "name": "Frage-ID",
-          "description": "Die ID der offenen Frage."
+          "name": "ID",
+          "description": "Die ID der offenen Frage oder des Zeitplans."
         },
         "reason": {
           "name": "Grund",
           "description": "Optionaler Grund, wird nur geloggt."
+        }
+      }
+    },
+    "schedule": {
+      "name": "Benachrichtigung planen",
+      "description": "Stellt eine Benachrichtigung zu einem späteren Zeitpunkt zu; überlebt Neustarts. Priorität 0 führt die Nachricht als LLM-Instruktion über den internen Channel aus.",
+      "fields": {
+        "scheduled_for": {
+          "name": "Geplant für",
+          "description": "Wann zugestellt wird: '+1h30m', '18:00' oder ein ISO-Datum."
+        },
+        "message": {
+          "name": "Nachricht",
+          "description": "Der Benachrichtigungstext (oder die LLM-Instruktion bei Priorität 0)."
+        },
+        "priority": {
+          "name": "Priorität",
+          "description": "0 = intern, 1 = Todo, 2 = normal, 3 = wichtig, 4 = Alarm."
+        },
+        "recipient": {
+          "name": "Empfänger",
+          "description": "Person-Entität; Standard ist der konfigurierte Empfänger."
+        },
+        "target_player": {
+          "name": "Ziel-Player",
+          "description": "Optionales Ziel, das die Raumerkennung überschreibt."
+        },
+        "title": {
+          "name": "Titel",
+          "description": "Optionaler Titel der Push-Benachrichtigung."
+        },
+        "tag": {
+          "name": "Tag",
+          "description": "Optionales Tag für Deduplizierung (ab Phase 4 genutzt)."
+        }
+      }
+    },
+    "remind_self": {
+      "name": "Selbsterinnerung (LLM)",
+      "description": "Plant eine P0-Selbsterinnerung: Zum Zeitpunkt führt der konfigurierte Conversation-Agent die Instruktion still aus.",
+      "fields": {
+        "when": {
+          "name": "Wann",
+          "description": "'+30m', '+1h30m', '18:00' oder ein ISO-Datum."
+        },
+        "instruction": {
+          "name": "Instruktion",
+          "description": "Selbstgerichteter Prompt für den Agent, z.B. 'Schalte das Wohnzimmerlicht aus.'"
         }
       }
     }

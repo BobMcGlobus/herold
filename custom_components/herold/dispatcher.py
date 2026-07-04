@@ -1,12 +1,11 @@
 """Stateless dispatch rules: whether and where a notification is delivered.
 
-The priority rules are ported 1:1 from the original omnichannel script
-(see HEROLD_PLAN.md section 3):
+The priority rules follow HEROLD_PLAN.md section 3:
 
-* P0 (internal): never user-facing — skipped with a log entry until the
-  internal channel lands in Phase 3.
-* P1 (todo): only when home and not DND — dropped otherwise until the todo
-  channel lands in Phase 3.
+* P0 (internal): never user-facing — executed by a conversation agent via
+  the internal channel.
+* P1 (todo): silent — always lands in the todo inbox (no DND/home gating,
+  the inbox is for later review by definition).
 * P2 (normal): dropped while DND is active.
 * P3 (important) / P4 (alarm): always delivered.
 
@@ -22,8 +21,10 @@ import logging
 from typing import TYPE_CHECKING
 
 from .const import (
+    CHANNEL_INTERNAL,
     CHANNEL_PUSH,
     CHANNEL_TELEGRAM,
+    CHANNEL_TODO,
     CHANNEL_VOICE,
     CONF_TELEGRAM_CHAT_ID,
     PRIORITY_IMPORTANT,
@@ -57,13 +58,9 @@ def should_deliver(
     """Decide whether the notification/query passes the priority rules."""
     priority = item.priority
     if priority == PRIORITY_INTERNAL:
-        return (False, "priority 0 (internal) lands in Phase 3")
+        return (True, "priority 0 runs through the internal channel")
     if priority == PRIORITY_TODO:
-        if not ctx.is_home:
-            return (False, "priority 1 requires the recipient to be home")
-        if ctx.is_dnd:
-            return (False, "priority 1 blocked by DND")
-        return (True, "priority 1 accepted")
+        return (True, "priority 1 lands silently in the todo inbox")
     if priority == PRIORITY_NORMAL:
         if ctx.is_dnd:
             return (False, "priority 2 blocked by DND")
@@ -76,6 +73,12 @@ def select_channels(
 ) -> list[BaseChannel]:
     """Pick the channels used for a fire-and-forget notification."""
     coordinator = ctx.coordinator
+
+    if notification.priority == PRIORITY_INTERNAL:
+        return [coordinator.channels[CHANNEL_INTERNAL]]
+    if notification.priority == PRIORITY_TODO:
+        return [coordinator.channels[CHANNEL_TODO]]
+
     voice = coordinator.channels[CHANNEL_VOICE]
     push = coordinator.channels[CHANNEL_PUSH]
     selected: list[BaseChannel] = []

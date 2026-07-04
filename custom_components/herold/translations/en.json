@@ -50,6 +50,14 @@
           "pending_question_entity": "Pending question helper (input_text)"
         }
       },
+      "llm": {
+        "title": "LLM (internal reminders)",
+        "description": "Optional: conversation agents that execute P0 self-reminders (herold.remind_self). The fallback agent takes over when the primary one fails, e.g. a local Ollama while offline.",
+        "data": {
+          "p0_agent_id": "P0 conversation agent",
+          "p0_fallback_agent_id": "P0 fallback agent"
+        }
+      },
       "dnd": {
         "title": "Do not disturb",
         "data": {
@@ -83,6 +91,7 @@
           "voice": "Voice (TTS, internet sensor)",
           "push": "Push (mobile app devices)",
           "chat": "Chat (Telegram)",
+          "llm": "LLM (internal reminders)",
           "dnd": "Do not disturb",
           "offline": "Offline behavior"
         }
@@ -113,6 +122,13 @@
         "data": {
           "telegram_chat_id": "Telegram chat ID",
           "pending_question_entity": "Pending question helper (input_text)"
+        }
+      },
+      "llm": {
+        "title": "LLM (internal reminders)",
+        "data": {
+          "p0_agent_id": "P0 conversation agent",
+          "p0_fallback_agent_id": "P0 fallback agent"
         }
       },
       "dnd": {
@@ -194,6 +210,14 @@
       },
       "last_query": {
         "name": "Last query"
+      },
+      "scheduled_count": {
+        "name": "Scheduled notifications"
+      }
+    },
+    "todo": {
+      "inbox": {
+        "name": "Inbox"
       }
     },
     "binary_sensor": {
@@ -313,16 +337,64 @@
       }
     },
     "cancel": {
-      "name": "Cancel a query",
-      "description": "Cancels a pending query without firing answer events.",
+      "name": "Cancel a query or schedule",
+      "description": "Cancels a pending query or a scheduled notification without firing answer events.",
       "fields": {
         "id": {
-          "name": "Query ID",
-          "description": "The id of the pending query."
+          "name": "ID",
+          "description": "The id of the pending query or schedule."
         },
         "reason": {
           "name": "Reason",
           "description": "Optional reason, only logged."
+        }
+      }
+    },
+    "schedule": {
+      "name": "Schedule a notification",
+      "description": "Delivers a notification at a future time; survives restarts. Priority 0 runs the message as an LLM instruction through the internal channel.",
+      "fields": {
+        "scheduled_for": {
+          "name": "Scheduled for",
+          "description": "When to deliver: '+1h30m', '18:00' or an ISO datetime."
+        },
+        "message": {
+          "name": "Message",
+          "description": "The notification text (or LLM instruction for priority 0)."
+        },
+        "priority": {
+          "name": "Priority",
+          "description": "0 = internal, 1 = todo, 2 = normal, 3 = important, 4 = alarm."
+        },
+        "recipient": {
+          "name": "Recipient",
+          "description": "Person entity; defaults to the configured recipient."
+        },
+        "target_player": {
+          "name": "Target player",
+          "description": "Optional target that overrides room detection."
+        },
+        "title": {
+          "name": "Title",
+          "description": "Optional push notification title."
+        },
+        "tag": {
+          "name": "Tag",
+          "description": "Optional tag for deduplication (used from Phase 4)."
+        }
+      }
+    },
+    "remind_self": {
+      "name": "Remind self (LLM)",
+      "description": "Schedules a P0 self-reminder: at the given time the instruction is executed silently by the configured conversation agent.",
+      "fields": {
+        "when": {
+          "name": "When",
+          "description": "'+30m', '+1h30m', '18:00' or an ISO datetime."
+        },
+        "instruction": {
+          "name": "Instruction",
+          "description": "Self-directed prompt for the agent, e.g. 'Schalte das Wohnzimmerlicht aus.'"
         }
       }
     }

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.const import STATE_HOME, STATE_ON
 from homeassistant.core import Event, EventStateChangedData, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import llm
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
@@ -20,13 +21,17 @@ from homeassistant.util import dt as dt_util
 from .channels import (
     BaseChannel,
     ChannelUnavailable,
+    InternalChannel,
     PushChannel,
     TelegramChannel,
+    TodoChannel,
     VoiceChannel,
 )
 from .const import (
+    CHANNEL_INTERNAL,
     CHANNEL_PUSH,
     CHANNEL_TELEGRAM,
+    CHANNEL_TODO,
     CHANNEL_VOICE,
     CONF_ENABLE_OFFLINE_FALLBACK,
     CONF_EXTERNAL_DND_ENTITY,
@@ -35,13 +40,19 @@ from .const import (
     CONF_RECIPIENT,
     CONF_ROOMS,
     EVENT_DELIVERED,
+    P0_RATE_LIMIT_PER_HOUR,
+    TODO_STATUS_DONE,
+    TODO_STATUS_OPEN,
     signal_delivery,
     signal_dnd,
+    signal_todo,
 )
 from .dispatcher import DispatchContext, select_channels, should_deliver
+from .llm_tools import HeroldAPI
 from .models import DeliveryResult, DNDState, Notification, Query, Room
 from .query_manager import QueryManager
 from .room_router import select_room
+from .scheduler import HeroldScheduler
 from .store import HeroldStore
 
 if TYPE_CHECKING:
@@ -65,8 +76,10 @@ class HeroldCoordinator:
         self.dnd_state = DNDState()
         self.store = HeroldStore(hass, entry.entry_id)
         self.query_manager = QueryManager(self)
+        self.scheduler = HeroldScheduler(self)
         self.last_result: DeliveryResult | None = None
         self.last_priority: int | None = None
+        self._p0_timestamps: list[float] = []
         self._unsubs: list[Callable[[], None]] = []
 
     async def async_setup(self) -> None:
@@ -82,6 +95,8 @@ class HeroldCoordinator:
             CHANNEL_VOICE: VoiceChannel(offline_capable=voice_offline_capable),
             CHANNEL_PUSH: PushChannel(),
             CHANNEL_TELEGRAM: TelegramChannel(),
+            CHANNEL_INTERNAL: InternalChannel(),
+            CHANNEL_TODO: TodoChannel(),
         }
 
         external = self.config.get(CONF_EXTERNAL_DND_ENTITY)
@@ -110,9 +125,15 @@ class HeroldCoordinator:
             )
 
         await self.query_manager.async_setup()
+        await self.scheduler.async_setup()
+
+        self._unsubs.append(
+            llm.async_register_api(self.hass, HeroldAPI(self.hass, self))
+        )
 
     async def async_shutdown(self) -> None:
         """Detach listeners and flush the store on unload."""
+        await self.scheduler.async_shutdown()
         await self.query_manager.async_shutdown()
         for unsub in self._unsubs:
             unsub()
@@ -150,6 +171,81 @@ class HeroldCoordinator:
         """Record the most recent delivery for the debug sensor."""
         self.last_result = result
         self.last_priority = priority
+
+    @callback
+    def p0_allowed(self) -> bool:
+        """Anti-runaway rate limit for P0 internal triggers (rolling hour)."""
+        now = dt_util.utcnow().timestamp()
+        self._p0_timestamps = [
+            stamp for stamp in self._p0_timestamps if now - stamp < 3600
+        ]
+        if len(self._p0_timestamps) >= P0_RATE_LIMIT_PER_HOUR:
+            return False
+        self._p0_timestamps.append(now)
+        return True
+
+    # -- Todo inbox (backing storage for todo.herold_inbox) -----------------
+
+    @callback
+    def async_add_todo_item(
+        self, uid: str, summary: str, description: str | None = None
+    ) -> None:
+        """Add (or replace) an inbox item."""
+        items = self.store.todo_items
+        items[:] = [item for item in items if item.get("uid") != uid]
+        items.append(
+            {
+                "uid": uid,
+                "summary": summary,
+                "status": TODO_STATUS_OPEN,
+                "description": description,
+                "created_at": dt_util.utcnow().isoformat(),
+            }
+        )
+        self._todo_changed()
+
+    @callback
+    def async_update_todo_item(
+        self,
+        uid: str | None,
+        summary: str | None = None,
+        status: str | None = None,
+        description: str | None = None,
+    ) -> bool:
+        """Update an inbox item; returns False if unknown."""
+        for item in self.store.todo_items:
+            if item.get("uid") == uid:
+                if summary is not None:
+                    item["summary"] = summary
+                if status is not None:
+                    item["status"] = status
+                item["description"] = description
+                self._todo_changed()
+                return True
+        return False
+
+    @callback
+    def async_complete_todo_item(self, uid: str) -> bool:
+        """Mark an open inbox item as done; returns False if unknown."""
+        for item in self.store.todo_items:
+            if item.get("uid") == uid and item.get("status") == TODO_STATUS_OPEN:
+                item["status"] = TODO_STATUS_DONE
+                self._todo_changed()
+                return True
+        return False
+
+    @callback
+    def async_delete_todo_items(self, uids: list[str]) -> None:
+        """Delete inbox items."""
+        drop = set(uids)
+        items = self.store.todo_items
+        items[:] = [item for item in items if item.get("uid") not in drop]
+        self._todo_changed()
+
+    @callback
+    def _todo_changed(self) -> None:
+        self.store.async_schedule_save()
+        async_dispatcher_send(self.hass, signal_todo(self.entry.entry_id))
 
     @callback
     def _async_external_dnd_changed(
