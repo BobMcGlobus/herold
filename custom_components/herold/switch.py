@@ -59,8 +59,12 @@ class HeroldDNDSwitch(HeroldEntity, RestoreEntity, SwitchEntity):
         """Restore the last state and subscribe to DND updates."""
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
-        if last_state is not None:
-            self.coordinator.set_master_dnd(last_state.state == STATE_ON)
+        if last_state is not None and not self.coordinator.dnd_restored_from_session:
+            # A restored DND session already decided the state; plain restore
+            # would re-activate an expired session.
+            self.coordinator.set_master_dnd(
+                last_state.state == STATE_ON, from_session=True
+            )
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,

@@ -19,6 +19,7 @@ answer for the same callback id would make their action run fail.
 
 from __future__ import annotations
 
+from datetime import timedelta
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -39,8 +40,10 @@ from .const import (
     CHANNEL_TELEGRAM,
     CHANNEL_VOICE,
     CONF_TELEGRAM_CHAT_ID,
+    DEFAULT_VOICE_TIMEOUT_SECONDS,
     EVENT_ANSWERED,
     EVENT_DELIVERED,
+    EVENT_ESCALATED,
     EVENT_EXPIRED,
     QUERY_MODE_CHOICE,
     QUERY_MODE_OPEN,
@@ -83,7 +86,7 @@ class QueryManager:
     def __init__(self, coordinator: HeroldCoordinator) -> None:
         self.coordinator = coordinator
         self.queries: dict[str, Query] = {}
-        self._timers: dict[str, Callable[[], None]] = {}
+        self._timers: dict[str, list[Callable[[], None]]] = {}
         self._unsubs: list[Callable[[], None]] = []
 
     async def async_setup(self) -> None:
@@ -98,7 +101,8 @@ class QueryManager:
             if query.timeout_at <= dt_util.utcnow():
                 await self._async_timeout(query)
             else:
-                self._arm_timer(query)
+                self._arm_timeout(query)
+                self._arm_escalations(query)
 
         self._unsubs.append(
             hass.bus.async_listen("telegram_callback", self._async_telegram_callback)
@@ -109,8 +113,9 @@ class QueryManager:
 
     async def async_shutdown(self) -> None:
         """Cancel timers and detach listeners."""
-        for cancel in self._timers.values():
-            cancel()
+        for cancels in self._timers.values():
+            for cancel in cancels:
+                cancel()
         self._timers.clear()
         for unsub in self._unsubs:
             unsub()
@@ -188,7 +193,9 @@ class QueryManager:
                 )
 
         self.queries[query.id] = query
-        self._arm_timer(query)
+        self._arm_timeout(query)
+        self._arm_escalations(query)
+        self._arm_voice_fallback(query)
         self._persist(query)
         coordinator.note_delivery(result, query.priority)
         async_dispatcher_send(
@@ -275,23 +282,136 @@ class QueryManager:
             f"{query.choices}"
         )
 
-    # -- Timeout handling --------------------------------------------------
+    # -- Timers (timeout, escalation, voice fallback) ------------------------
 
-    def _arm_timer(self, query: Query) -> None:
+    def _add_timer(self, query_id: str, cancel: Callable[[], None]) -> None:
+        self._timers.setdefault(query_id, []).append(cancel)
+
+    def _arm_timeout(self, query: Query) -> None:
         delay = (query.timeout_at - dt_util.utcnow()).total_seconds()
 
         async def _fire(_now: Any) -> None:
-            self._timers.pop(query.id, None)
             await self._async_timeout(query)
 
-        self._timers[query.id] = async_call_later(
-            self.coordinator.hass, max(delay, 0), _fire
+        self._add_timer(
+            query.id,
+            async_call_later(self.coordinator.hass, max(delay, 0), _fire),
+        )
+
+    def _arm_escalations(self, query: Query) -> None:
+        """Arm remaining escalation rules (past rules are skipped)."""
+        if not query.escalation:
+            return
+        now = dt_util.utcnow()
+        for rule in query.escalation:
+            fire_at = query.created_at + timedelta(
+                minutes=rule["after_minutes"]
+            )
+            delay = (fire_at - now).total_seconds()
+            if delay <= 0:
+                continue
+
+            async def _fire(_now: Any, rule: dict[str, int] = rule) -> None:
+                await self._async_escalate(query, rule)
+
+            self._add_timer(
+                query.id,
+                async_call_later(self.coordinator.hass, delay, _fire),
+            )
+
+    def _arm_voice_fallback(self, query: Query) -> None:
+        """After the voice answer window, push the buttons to Telegram.
+
+        Only relevant when voice was the answer-capable channel and Telegram
+        has not been used yet — a spoken question shouldn't hang forever if
+        nobody answers the satellite.
+        """
+        if CHANNEL_VOICE not in query.channels_delivered:
+            return
+        if CHANNEL_TELEGRAM in query.channels_delivered:
+            return
+        if not self.coordinator.config.get(CONF_TELEGRAM_CHAT_ID):
+            return
+        delay = query.voice_timeout_seconds or DEFAULT_VOICE_TIMEOUT_SECONDS
+
+        async def _fire(_now: Any) -> None:
+            await self._async_voice_fallback(query)
+
+        self._add_timer(
+            query.id, async_call_later(self.coordinator.hass, delay, _fire)
         )
 
     def _cancel_timer(self, query_id: str) -> None:
-        cancel = self._timers.pop(query_id, None)
-        if cancel:
+        for cancel in self._timers.pop(query_id, []):
             cancel()
+
+    async def _async_voice_fallback(self, query: Query) -> None:
+        if not query.is_pending:
+            return
+        if CHANNEL_TELEGRAM in query.channels_delivered:
+            return
+        telegram = self.coordinator.channels[CHANNEL_TELEGRAM]
+        try:
+            await telegram.deliver_query(query, self.coordinator)
+        except HomeAssistantError as err:
+            _LOGGER.warning(
+                "Voice fallback to Telegram failed for %s: %s", query.id, err
+            )
+            return
+        query.channels_delivered.append(CHANNEL_TELEGRAM)
+        self._persist(query)
+        _LOGGER.debug(
+            "Query %s: no voice answer within %s s, buttons sent to Telegram",
+            query.id,
+            query.voice_timeout_seconds or DEFAULT_VOICE_TIMEOUT_SECONDS,
+        )
+        self._notify_change()
+
+    async def _async_escalate(self, query: Query, rule: dict[str, int]) -> None:
+        """Raise the priority of an unanswered query and redeliver."""
+        if not query.is_pending:
+            return
+        new_priority = rule["raise_to_priority"]
+        if new_priority <= query.priority:
+            return
+        old_priority = query.priority
+        query.priority = new_priority
+        query.escalated = True
+
+        coordinator = self.coordinator
+        ctx = DispatchContext(
+            coordinator=coordinator,
+            is_home=coordinator.is_home,
+            is_dnd=coordinator.is_dnd_active(),
+            internet_available=coordinator.internet_available,
+        )
+        for channel in select_query_channels(query, ctx):
+            try:
+                await channel.deliver_query(query, coordinator)
+            except HomeAssistantError as err:
+                _LOGGER.debug(
+                    "Escalation redelivery via %s failed for %s: %s",
+                    channel.name,
+                    query.id,
+                    err,
+                )
+            else:
+                if channel.name not in query.channels_delivered:
+                    query.channels_delivered.append(channel.name)
+
+        coordinator.hass.bus.async_fire(
+            EVENT_ESCALATED,
+            {
+                ATTR_ID: query.id,
+                "from_priority": old_priority,
+                "to_priority": new_priority,
+            },
+        )
+        self._persist(query)
+        _LOGGER.debug(
+            "Query %s escalated P%s → P%s", query.id, old_priority, new_priority
+        )
+        self._notify_change()
 
     async def _async_timeout(self, query: Query) -> None:
         if not query.is_pending:

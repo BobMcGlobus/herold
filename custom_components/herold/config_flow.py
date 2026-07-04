@@ -22,6 +22,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
     SelectSelectorMode,
     TextSelector,
+    TextSelectorConfig,
 )
 import voluptuous as vol
 
@@ -47,6 +48,7 @@ from .const import (
     CONF_ROOMS,
     CONF_SAT_ENTITY,
     CONF_TELEGRAM_CHAT_ID,
+    CONF_TEMPLATES,
     DEFAULT_CREATE_INTERNAL_SWITCH,
     DEFAULT_ENABLE_OFFLINE_FALLBACK,
     DEFAULT_ENABLE_OFFLINE_QUEUE,
@@ -153,6 +155,20 @@ OFFLINE_SCHEMA = vol.Schema(
     }
 )
 
+TEMPLATE_SCHEMA = vol.Schema(
+    {
+        vol.Required("template_name"): TextSelector(),
+        vol.Required("message"): TextSelector(
+            TextSelectorConfig(multiline=True)
+        ),
+        vol.Optional("priority", default=2): NumberSelector(
+            NumberSelectorConfig(min=0, max=4, step=1, mode=NumberSelectorMode.BOX)
+        ),
+        vol.Optional("title"): TextSelector(),
+        vol.Optional("tag"): TextSelector(),
+    }
+)
+
 BASIC_KEYS = (CONF_RECIPIENT, CONF_INTEGRATION_NAME)
 VOICE_KEYS = (CONF_PRIMARY_TTS, CONF_FALLBACK_TTS, CONF_INTERNET_SENSOR)
 PUSH_KEYS = (CONF_MOBILE_APP_DEVICES,)
@@ -172,6 +188,20 @@ def _validate_room(user_input: dict[str, Any]) -> dict[str, str]:
     ):
         errors["base"] = "room_no_output"
     return errors
+
+
+def _normalize_template(
+    user_input: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    """Split a template form result into (name, stored fields)."""
+    name = user_input["template_name"].strip()
+    template = {
+        "message": user_input["message"],
+        "priority": int(user_input.get("priority", 2)),
+        "title": user_input.get("title"),
+        "tag": user_input.get("tag"),
+    }
+    return name, template
 
 
 def _normalize_room(user_input: dict[str, Any]) -> dict[str, Any]:
@@ -307,6 +337,7 @@ class HeroldOptionsFlow(OptionsFlow):
     def __init__(self) -> None:
         self._config: dict[str, Any] | None = None
         self._edit_index: int = 0
+        self._edit_template: str = ""
 
     @property
     def _current(self) -> dict[str, Any]:
@@ -336,6 +367,7 @@ class HeroldOptionsFlow(OptionsFlow):
                 "llm",
                 "dnd",
                 "offline",
+                "templates_menu",
             ],
         )
 
@@ -512,5 +544,104 @@ class HeroldOptionsFlow(OptionsFlow):
     async def async_step_save(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Persist room changes and finish the options flow."""
+        """Persist room/template changes and finish the options flow."""
         return self.async_create_entry(title="", data=self._current)
+
+    # -- Templates editor ----------------------------------------------------
+
+    @property
+    def _templates(self) -> dict[str, Any]:
+        return self._current.setdefault(CONF_TEMPLATES, {})
+
+    async def async_step_templates_menu(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show the templates submenu."""
+        return self.async_show_menu(
+            step_id="templates_menu",
+            menu_options=[
+                "template_add",
+                "template_edit",
+                "template_remove",
+                "save",
+            ],
+        )
+
+    async def async_step_template_add(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Add a notification template."""
+        if user_input is not None:
+            name, template = _normalize_template(user_input)
+            self._templates[name] = template
+            return await self.async_step_templates_menu()
+        return self.async_show_form(
+            step_id="template_add", data_schema=TEMPLATE_SCHEMA
+        )
+
+    async def async_step_template_edit(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Pick a template to edit."""
+        if not self._templates:
+            return await self.async_step_templates_menu()
+        if user_input is not None:
+            self._edit_template = user_input["template_name"]
+            return await self.async_step_template_edit_form()
+        options = [
+            SelectOptionDict(value=name, label=name)
+            for name in sorted(self._templates)
+        ]
+        schema = vol.Schema(
+            {
+                vol.Required("template_name"): SelectSelector(
+                    SelectSelectorConfig(
+                        options=options, mode=SelectSelectorMode.DROPDOWN
+                    )
+                )
+            }
+        )
+        return self.async_show_form(step_id="template_edit", data_schema=schema)
+
+    async def async_step_template_edit_form(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit the selected template (renaming allowed)."""
+        if user_input is not None:
+            name, template = _normalize_template(user_input)
+            self._templates.pop(self._edit_template, None)
+            self._templates[name] = template
+            return await self.async_step_templates_menu()
+        current = self._templates.get(self._edit_template, {})
+        suggested = {"template_name": self._edit_template, **current}
+        return self.async_show_form(
+            step_id="template_edit_form",
+            data_schema=self.add_suggested_values_to_schema(
+                TEMPLATE_SCHEMA, suggested
+            ),
+        )
+
+    async def async_step_template_remove(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Remove templates."""
+        if user_input is not None:
+            for name in user_input.get("template_names", []):
+                self._templates.pop(name, None)
+            return await self.async_step_templates_menu()
+        options = [
+            SelectOptionDict(value=name, label=name)
+            for name in sorted(self._templates)
+        ]
+        schema = vol.Schema(
+            {
+                vol.Required("template_names", default=[]): SelectSelector(
+                    SelectSelectorConfig(
+                        options=options,
+                        mode=SelectSelectorMode.LIST,
+                        multiple=True,
+                    )
+                )
+            }
+        )
+        return self.async_show_form(step_id="template_remove", data_schema=schema)

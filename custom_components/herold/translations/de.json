@@ -93,7 +93,8 @@
           "chat": "Chat (Telegram)",
           "llm": "LLM (interne Erinnerungen)",
           "dnd": "Nicht stören",
-          "offline": "Offline-Verhalten"
+          "offline": "Offline-Verhalten",
+          "templates_menu": "Vorlagen (hinzufügen / bearbeiten / entfernen)"
         }
       },
       "basic": {
@@ -187,6 +188,48 @@
         "data": {
           "room_indexes": "Zu entfernende Räume"
         }
+      },
+      "templates_menu": {
+        "title": "Benachrichtigungs-Vorlagen",
+        "menu_options": {
+          "template_add": "Vorlage hinzufügen",
+          "template_edit": "Vorlage bearbeiten",
+          "template_remove": "Vorlagen entfernen",
+          "save": "Speichern und schließen"
+        }
+      },
+      "template_add": {
+        "title": "Vorlage hinzufügen",
+        "description": "Nachricht, Titel und Tag werden als Jinja-Templates mit den template_vars des Aufrufs gerendert, z.B. '{{ appliance }} ist fertig'.",
+        "data": {
+          "template_name": "Vorlagenname",
+          "message": "Nachricht",
+          "priority": "Priorität",
+          "title": "Titel",
+          "tag": "Tag"
+        }
+      },
+      "template_edit": {
+        "title": "Vorlage bearbeiten",
+        "data": {
+          "template_name": "Vorlage"
+        }
+      },
+      "template_edit_form": {
+        "title": "Vorlage bearbeiten",
+        "data": {
+          "template_name": "Vorlagenname",
+          "message": "Nachricht",
+          "priority": "Priorität",
+          "title": "Titel",
+          "tag": "Tag"
+        }
+      },
+      "template_remove": {
+        "title": "Vorlagen entfernen",
+        "data": {
+          "template_names": "Zu entfernende Vorlagen"
+        }
       }
     },
     "error": {
@@ -213,6 +256,9 @@
       },
       "scheduled_count": {
         "name": "Geplante Benachrichtigungen"
+      },
+      "next_schedule": {
+        "name": "Nächste Zustellung"
       }
     },
     "todo": {
@@ -229,6 +275,9 @@
       },
       "any_pending": {
         "name": "Frage offen"
+      },
+      "escalation_active": {
+        "name": "Eskalation aktiv"
       }
     },
     "button": {
@@ -273,6 +322,18 @@
         "callback_event": {
           "name": "Callback-Event",
           "description": "Legacy-Callback-Event-ID (nur für Fragen relevant)."
+        },
+        "template": {
+          "name": "Vorlage",
+          "description": "Name einer Benachrichtigungs-Vorlage (Optionen → Vorlagen). Explizite Felder überschreiben die Vorlagenwerte."
+        },
+        "template_vars": {
+          "name": "Vorlagen-Variablen",
+          "description": "Variablen für die Platzhalter, z.B. {\"appliance\": \"Waschmaschine\"}."
+        },
+        "ignore_rate_limit": {
+          "name": "Rate-Limit ignorieren",
+          "description": "Umgeht den Prioritäts-Rate-Limiter für diese Benachrichtigung."
         }
       }
     },
@@ -302,11 +363,19 @@
         },
         "timeout_minutes": {
           "name": "Timeout (Minuten)",
-          "description": "Wie lange auf eine Antwort gewartet wird, bevor die Frage abläuft."
+          "description": "Wie lange insgesamt auf eine Antwort gewartet wird (inkl. Chat)."
+        },
+        "voice_timeout_seconds": {
+          "name": "Voice-Timeout (Sekunden)",
+          "description": "Wurde die Frage am Satelliten gestellt und kommt in diesem Fenster keine Antwort, gehen die Antwort-Buttons an Telegram (Standard 90 s)."
         },
         "default_answer": {
           "name": "Standard-Antwort",
           "description": "Wird beim Erreichen des Timeouts automatisch verwendet."
+        },
+        "escalation": {
+          "name": "Eskalation",
+          "description": "Liste von Regeln, z.B. [{\"after_minutes\": 5, \"raise_to_priority\": 3}] — unbeantwortete Fragen werden mit höherer Priorität erneut zugestellt."
         },
         "recipient": {
           "name": "Empfänger",
@@ -397,6 +466,24 @@
           "description": "Selbstgerichteter Prompt für den Agent, z.B. 'Schalte das Wohnzimmerlicht aus.'"
         }
       }
+    },
+    "dnd_on": {
+      "name": "DND ein",
+      "description": "Aktiviert Nicht-stören, optional als Session mit automatischem Ende.",
+      "fields": {
+        "until": {
+          "name": "Bis",
+          "description": "'+1h', '15:30' oder ein ISO-Datum — DND endet automatisch."
+        },
+        "until_home": {
+          "name": "Bis zuhause",
+          "description": "DND endet, wenn der Empfänger nach Hause kommt."
+        }
+      }
+    },
+    "dnd_off": {
+      "name": "DND aus",
+      "description": "Deaktiviert Nicht-stören und beendet eine laufende DND-Session."
     }
   }
 }

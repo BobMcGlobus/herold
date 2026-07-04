@@ -15,7 +15,9 @@ from .const import (
     ATTR_CALLBACK_EVENT,
     ATTR_CHOICES,
     ATTR_DEFAULT_ANSWER,
+    ATTR_ESCALATION,
     ATTR_ID,
+    ATTR_IGNORE_RATE_LIMIT,
     ATTR_INSTRUCTION,
     ATTR_MESSAGE,
     ATTR_MODE,
@@ -27,9 +29,14 @@ from .const import (
     ATTR_SOURCE,
     ATTR_TAG,
     ATTR_TARGET_PLAYER,
+    ATTR_TEMPLATE,
+    ATTR_TEMPLATE_VARS,
     ATTR_TIMEOUT_MINUTES,
     ATTR_TITLE,
     ATTR_TTL_MINUTES,
+    ATTR_UNTIL,
+    ATTR_UNTIL_HOME,
+    ATTR_VOICE_TIMEOUT_SECONDS,
     ATTR_WHEN,
     CONF_RECIPIENT,
     DEFAULT_PRIORITY,
@@ -41,6 +48,8 @@ from .const import (
     QUERY_MODES,
     SERVICE_ACKNOWLEDGE,
     SERVICE_CANCEL,
+    SERVICE_DND_OFF,
+    SERVICE_DND_ON,
     SERVICE_QUERY,
     SERVICE_REMIND_SELF,
     SERVICE_SCHEDULE,
@@ -48,6 +57,7 @@ from .const import (
 )
 from .models import Notification, Query, Schedule
 from .scheduler import parse_when
+from .templates import resolve_template
 
 if TYPE_CHECKING:
     from .coordinator import HeroldCoordinator
@@ -58,8 +68,8 @@ _PRIORITY = vol.All(vol.Coerce(int), vol.Range(min=0, max=4))
 
 SEND_SCHEMA = vol.Schema(
     {
-        vol.Required(ATTR_MESSAGE): cv.string,
-        vol.Optional(ATTR_PRIORITY, default=DEFAULT_PRIORITY): _PRIORITY,
+        vol.Optional(ATTR_MESSAGE): cv.string,
+        vol.Optional(ATTR_PRIORITY): _PRIORITY,
         vol.Optional(ATTR_RECIPIENT): cv.entity_id,
         vol.Optional(ATTR_TARGET_PLAYER): cv.entity_id,
         vol.Optional(ATTR_TITLE): cv.string,
@@ -68,6 +78,20 @@ SEND_SCHEMA = vol.Schema(
             vol.Coerce(int), vol.Range(min=0, max=1440)
         ),
         vol.Optional(ATTR_CALLBACK_EVENT): cv.string,
+        vol.Optional(ATTR_TEMPLATE): cv.string,
+        vol.Optional(ATTR_TEMPLATE_VARS): dict,
+        vol.Optional(ATTR_IGNORE_RATE_LIMIT, default=False): cv.boolean,
+    }
+)
+
+ESCALATION_RULE_SCHEMA = vol.Schema(
+    {
+        vol.Required("after_minutes"): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=1440)
+        ),
+        vol.Required("raise_to_priority"): vol.All(
+            vol.Coerce(int), vol.Range(min=2, max=4)
+        ),
     }
 )
 
@@ -83,11 +107,26 @@ QUERY_SCHEMA = vol.Schema(
         vol.Optional(
             ATTR_TIMEOUT_MINUTES, default=DEFAULT_QUERY_TIMEOUT_MINUTES
         ): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
+        vol.Optional(ATTR_VOICE_TIMEOUT_SECONDS): vol.All(
+            vol.Coerce(int), vol.Range(min=10, max=3600)
+        ),
         vol.Optional(ATTR_DEFAULT_ANSWER): cv.string,
+        vol.Optional(ATTR_ESCALATION): vol.All(
+            cv.ensure_list, [ESCALATION_RULE_SCHEMA]
+        ),
         vol.Optional(ATTR_RECIPIENT): cv.entity_id,
         vol.Optional(ATTR_TARGET_PLAYER): cv.entity_id,
     }
 )
+
+DND_ON_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_UNTIL): cv.string,
+        vol.Optional(ATTR_UNTIL_HOME, default=False): cv.boolean,
+    }
+)
+
+DND_OFF_SCHEMA = vol.Schema({})
 
 ACKNOWLEDGE_SCHEMA = vol.Schema(
     {
@@ -135,17 +174,36 @@ def _get_coordinator(hass: HomeAssistant) -> HeroldCoordinator:
 async def _async_handle_send(call: ServiceCall) -> None:
     """Handle herold.send (fire-and-forget)."""
     coordinator = _get_coordinator(call.hass)
+
+    # Template fields provide defaults; explicit call fields win.
+    fields: dict = {}
+    if template_name := call.data.get(ATTR_TEMPLATE):
+        fields = resolve_template(
+            call.hass,
+            coordinator.config,
+            template_name,
+            call.data.get(ATTR_TEMPLATE_VARS),
+        )
+    for key in (ATTR_MESSAGE, ATTR_PRIORITY, ATTR_TITLE, ATTR_TAG):
+        if key in call.data:
+            fields[key] = call.data[key]
+    if not fields.get(ATTR_MESSAGE):
+        raise HomeAssistantError(
+            "Either message or a template providing one is required"
+        )
+
     notification = Notification(
-        message=call.data[ATTR_MESSAGE],
-        priority=call.data[ATTR_PRIORITY],
+        message=fields[ATTR_MESSAGE],
+        priority=fields.get(ATTR_PRIORITY, DEFAULT_PRIORITY),
         recipient=call.data.get(
             ATTR_RECIPIENT, coordinator.config.get(CONF_RECIPIENT)
         ),
         target_player=call.data.get(ATTR_TARGET_PLAYER),
         callback_event=call.data.get(ATTR_CALLBACK_EVENT),
-        tag=call.data.get(ATTR_TAG),
+        tag=fields.get(ATTR_TAG),
         ttl_minutes=call.data.get(ATTR_TTL_MINUTES),
-        title=call.data.get(ATTR_TITLE),
+        title=fields.get(ATTR_TITLE),
+        context={"ignore_rate_limit": call.data[ATTR_IGNORE_RATE_LIMIT]},
     )
     _LOGGER.debug("Service send: notification %s", notification.id)
     await coordinator.async_send(notification)
@@ -165,7 +223,9 @@ async def _async_handle_query(call: ServiceCall) -> None:
         priority=call.data[ATTR_PRIORITY],
         callback_event=call.data[ATTR_CALLBACK_EVENT],
         timeout_minutes=call.data[ATTR_TIMEOUT_MINUTES],
+        voice_timeout_seconds=call.data.get(ATTR_VOICE_TIMEOUT_SECONDS),
         default_answer=call.data.get(ATTR_DEFAULT_ANSWER),
+        escalation=call.data.get(ATTR_ESCALATION),
         recipient=call.data.get(
             ATTR_RECIPIENT, coordinator.config.get(CONF_RECIPIENT)
         ),
@@ -232,6 +292,25 @@ async def _async_handle_remind_self(call: ServiceCall) -> None:
     await coordinator.scheduler.async_add(schedule)
 
 
+async def _async_handle_dnd_on(call: ServiceCall) -> None:
+    """Handle herold.dnd_on (optionally as a session with an end condition)."""
+    coordinator = _get_coordinator(call.hass)
+    until_raw = call.data.get(ATTR_UNTIL)
+    until_home = call.data[ATTR_UNTIL_HOME]
+    if until_raw is None and not until_home:
+        coordinator.set_master_dnd(True)
+        return
+    until = parse_when(until_raw) if until_raw else None
+    _LOGGER.debug("DND session: until=%s until_home=%s", until, until_home)
+    await coordinator.async_dnd_session(until, until_home)
+
+
+async def _async_handle_dnd_off(call: ServiceCall) -> None:
+    """Handle herold.dnd_off."""
+    coordinator = _get_coordinator(call.hass)
+    coordinator.set_master_dnd(False)
+
+
 _SERVICES = (
     (SERVICE_SEND, _async_handle_send, SEND_SCHEMA),
     (SERVICE_QUERY, _async_handle_query, QUERY_SCHEMA),
@@ -239,6 +318,8 @@ _SERVICES = (
     (SERVICE_CANCEL, _async_handle_cancel, CANCEL_SCHEMA),
     (SERVICE_SCHEDULE, _async_handle_schedule, SCHEDULE_SCHEMA),
     (SERVICE_REMIND_SELF, _async_handle_remind_self, REMIND_SELF_SCHEMA),
+    (SERVICE_DND_ON, _async_handle_dnd_on, DND_ON_SCHEMA),
+    (SERVICE_DND_OFF, _async_handle_dnd_off, DND_OFF_SCHEMA),
 )
 
 

@@ -15,7 +15,10 @@ from homeassistant.core import Event, EventStateChangedData, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import llm
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import (
+    async_track_point_in_time,
+    async_track_state_change_event,
+)
 from homeassistant.util import dt as dt_util
 
 from .channels import (
@@ -51,12 +54,14 @@ from .dispatcher import DispatchContext, select_channels, should_deliver
 from .llm_tools import HeroldAPI
 from .models import DeliveryResult, DNDState, Notification, Query, Room
 from .query_manager import QueryManager
+from .rate_limiter import RateLimiter
 from .room_router import select_room
 from .scheduler import HeroldScheduler
 from .store import HeroldStore
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from datetime import datetime
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -77,9 +82,12 @@ class HeroldCoordinator:
         self.store = HeroldStore(hass, entry.entry_id)
         self.query_manager = QueryManager(self)
         self.scheduler = HeroldScheduler(self)
+        self.rate_limiter = RateLimiter(self)
         self.last_result: DeliveryResult | None = None
         self.last_priority: int | None = None
         self._p0_timestamps: list[float] = []
+        self._dnd_session_unsubs: list[Callable[[], None]] = []
+        self._dnd_restored_from_session = False
         self._unsubs: list[Callable[[], None]] = []
 
     async def async_setup(self) -> None:
@@ -126,6 +134,7 @@ class HeroldCoordinator:
 
         await self.query_manager.async_setup()
         await self.scheduler.async_setup()
+        self._async_restore_dnd_session()
 
         self._unsubs.append(
             llm.async_register_api(self.hass, HeroldAPI(self.hass, self))
@@ -135,6 +144,8 @@ class HeroldCoordinator:
         """Detach listeners and flush the store on unload."""
         await self.scheduler.async_shutdown()
         await self.query_manager.async_shutdown()
+        self.rate_limiter.shutdown()
+        self._clear_dnd_session_listeners()
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
@@ -161,10 +172,95 @@ class HeroldCoordinator:
         return self.dnd_state.effective
 
     @callback
-    def set_master_dnd(self, active: bool) -> None:
+    def set_master_dnd(self, active: bool, from_session: bool = False) -> None:
         """Update the internal DND switch state and notify listeners."""
+        if not from_session:
+            # Manual toggle ends any running DND session
+            self._clear_dnd_session_listeners()
+            self.store.dnd_session = None
+            self.store.async_schedule_save()
         self.dnd_state.master_active = active
         async_dispatcher_send(self.hass, signal_dnd(self.entry.entry_id))
+
+    @property
+    def dnd_restored_from_session(self) -> bool:
+        """True if the boot-time session restore already decided the DND state."""
+        return self._dnd_restored_from_session
+
+    @property
+    def dnd_session(self) -> dict[str, Any] | None:
+        """Return the active DND session, if any."""
+        return self.store.dnd_session
+
+    async def async_dnd_session(
+        self, until: datetime | None, until_home: bool
+    ) -> None:
+        """Activate DND with an automatic end condition."""
+        self._clear_dnd_session_listeners()
+        self.store.dnd_session = {
+            "until": until.isoformat() if until else None,
+            "until_home": until_home,
+        }
+        self.store.async_schedule_save()
+        self.set_master_dnd(True, from_session=True)
+        self._arm_dnd_session(until, until_home)
+
+    @callback
+    def _async_restore_dnd_session(self) -> None:
+        """Re-arm a persisted DND session after a restart."""
+        session = self.store.dnd_session
+        if not session:
+            return
+        self._dnd_restored_from_session = True
+        until_raw = session.get("until")
+        until = dt_util.parse_datetime(until_raw) if until_raw else None
+        until_home = bool(session.get("until_home"))
+        if until and until <= dt_util.utcnow():
+            self._end_dnd_session()
+            return
+        self.dnd_state.master_active = True
+        self._arm_dnd_session(until, until_home)
+
+    @callback
+    def _arm_dnd_session(
+        self, until: datetime | None, until_home: bool
+    ) -> None:
+        if until:
+
+            async def _expire(_now: datetime) -> None:
+                self._end_dnd_session()
+
+            self._dnd_session_unsubs.append(
+                async_track_point_in_time(self.hass, _expire, until)
+            )
+        recipient = self.config.get(CONF_RECIPIENT)
+        if until_home and recipient:
+
+            @callback
+            def _person_changed(event: Event[EventStateChangedData]) -> None:
+                new_state = event.data["new_state"]
+                if new_state is not None and new_state.state == STATE_HOME:
+                    self._end_dnd_session()
+
+            self._dnd_session_unsubs.append(
+                async_track_state_change_event(
+                    self.hass, [recipient], _person_changed
+                )
+            )
+
+    @callback
+    def _end_dnd_session(self) -> None:
+        self._clear_dnd_session_listeners()
+        self.store.dnd_session = None
+        self.store.async_schedule_save()
+        self.set_master_dnd(False, from_session=True)
+        _LOGGER.debug("DND session ended")
+
+    @callback
+    def _clear_dnd_session_listeners(self) -> None:
+        for unsub in self._dnd_session_unsubs:
+            unsub()
+        self._dnd_session_unsubs.clear()
 
     @callback
     def note_delivery(self, result: DeliveryResult, priority: int) -> None:
@@ -295,6 +391,21 @@ class HeroldCoordinator:
         deliver, reason = should_deliver(notification, ctx)
         if not deliver:
             _LOGGER.debug("Dropping notification %s: %s", notification.id, reason)
+            result.reason = reason
+            self.note_delivery(result, notification.priority)
+            async_dispatcher_send(self.hass, signal_delivery(self.entry.entry_id))
+            return result
+
+        allowed, limit_reason = self.rate_limiter.check(notification)
+        if not allowed:
+            _LOGGER.debug(
+                "Rate limiter held notification %s: %s",
+                notification.id,
+                limit_reason,
+            )
+            result.reason = limit_reason
+            self.note_delivery(result, notification.priority)
+            async_dispatcher_send(self.hass, signal_delivery(self.entry.entry_id))
             return result
 
         active_room = await self.async_get_active_room()

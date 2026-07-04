@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
@@ -12,6 +12,8 @@ from .const import DOMAIN, signal_delivery, signal_query, signal_schedule
 from .entity import HeroldEntity
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -32,6 +34,7 @@ async def async_setup_entry(
             HeroldPendingCountSensor(coordinator),
             HeroldLastQuerySensor(coordinator),
             HeroldScheduledCountSensor(coordinator),
+            HeroldNextScheduleSensor(coordinator),
         ]
     )
 
@@ -88,6 +91,7 @@ class HeroldLastDeliverySensor(HeroldSignalSensor):
             "timestamp": result.timestamp.isoformat(),
             "priority": self.coordinator.last_priority,
             "errors": result.errors,
+            "reason": result.reason,
         }
 
 
@@ -194,4 +198,35 @@ class HeroldScheduledCountSensor(HeroldSignalSensor):
                 }
                 for schedule in self.coordinator.scheduler.pending
             ]
+        }
+
+
+class HeroldNextScheduleSensor(HeroldSignalSensor):
+    """Timestamp of the next deferred delivery (TC13 feedback)."""
+
+    _attr_translation_key = "next_schedule"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _signal = staticmethod(signal_schedule)
+
+    def __init__(self, coordinator: HeroldCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_next_schedule"
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return when the next schedule fires."""
+        pending = self.coordinator.scheduler.pending
+        return pending[0].scheduled_for if pending else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose what fires next."""
+        pending = self.coordinator.scheduler.pending
+        if not pending:
+            return {}
+        next_schedule = pending[0]
+        return {
+            "id": next_schedule.id,
+            "message": next_schedule.payload.get("message"),
+            "priority": next_schedule.payload.get("priority"),
         }

@@ -100,7 +100,10 @@ class Query:
     recipient: str | None = None
     target_player: str | None = None
     timeout_minutes: int = DEFAULT_QUERY_TIMEOUT_MINUTES
+    voice_timeout_seconds: int | None = None
     default_answer: str | None = None
+    escalation: list[dict[str, int]] | None = None
+    escalated: bool = False
     created_at: datetime = field(default_factory=dt_util.utcnow)
     channels_delivered: list[str] = field(default_factory=list)
     status: str = QUERY_STATUS_PENDING
@@ -130,7 +133,10 @@ class Query:
             "recipient": self.recipient,
             "target_player": self.target_player,
             "timeout_minutes": self.timeout_minutes,
+            "voice_timeout_seconds": self.voice_timeout_seconds,
             "default_answer": self.default_answer,
+            "escalation": self.escalation,
+            "escalated": self.escalated,
             "created_at": self.created_at.isoformat(),
             "channels_delivered": self.channels_delivered,
             "status": self.status,
@@ -156,7 +162,10 @@ class Query:
             timeout_minutes=data.get(
                 "timeout_minutes", DEFAULT_QUERY_TIMEOUT_MINUTES
             ),
+            voice_timeout_seconds=data.get("voice_timeout_seconds"),
             default_answer=data.get("default_answer"),
+            escalation=data.get("escalation"),
+            escalated=data.get("escalated", False),
             created_at=_parse_datetime(data.get("created_at")) or dt_util.utcnow(),
             channels_delivered=list(data.get("channels_delivered") or []),
             status=data.get("status", QUERY_STATUS_PENDING),
@@ -258,6 +267,7 @@ class DeliveryResult:
     channels_used: list[str] = field(default_factory=list)
     errors: dict[str, str] = field(default_factory=dict)
     room_used: str | None = None
+    reason: str | None = None  # why nothing was delivered (drop/rate limit)
     timestamp: datetime = field(default_factory=dt_util.utcnow)
 
     def to_dict(self) -> dict[str, Any]:
@@ -267,6 +277,7 @@ class DeliveryResult:
             "channels_used": self.channels_used,
             "errors": self.errors,
             "room_used": self.room_used,
+            "reason": self.reason,
             "timestamp": self.timestamp.isoformat(),
         }
 

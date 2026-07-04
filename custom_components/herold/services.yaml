@@ -1,7 +1,6 @@
 send:
   fields:
     message:
-      required: true
       example: "Die Waschmaschine ist fertig"
       selector:
         text:
@@ -39,6 +38,18 @@ send:
       example: "AI_CONFIRM"
       selector:
         text:
+    template:
+      example: "appliance_done"
+      selector:
+        text:
+    template_vars:
+      example: '{"appliance": "Waschmaschine"}'
+      selector:
+        object:
+    ignore_rate_limit:
+      default: false
+      selector:
+        boolean:
 
 query:
   fields:
@@ -80,10 +91,21 @@ query:
         number:
           min: 1
           max: 1440
+    voice_timeout_seconds:
+      example: 90
+      selector:
+        number:
+          min: 10
+          max: 3600
+          unit_of_measurement: "s"
     default_answer:
       example: "Nein"
       selector:
         text:
+    escalation:
+      example: '[{"after_minutes": 5, "raise_to_priority": 3}]'
+      selector:
+        object:
     recipient:
       selector:
         entity:
@@ -175,3 +197,17 @@ remind_self:
       selector:
         text:
           multiline: true
+
+dnd_on:
+  fields:
+    until:
+      example: "+1h"
+      selector:
+        text:
+    until_home:
+      default: false
+      selector:
+        boolean:
+
+dnd_off:
+  fields: {}

@@ -27,6 +27,7 @@ class HeroldStore:
         self.queries: dict[str, dict[str, Any]] = {}
         self.schedules: dict[str, dict[str, Any]] = {}
         self.todo_items: list[dict[str, Any]] = []
+        self.dnd_session: dict[str, Any] | None = None
         self.last_known_room: str | None = None
         self.last_room_activity: datetime | None = None
         self.room_last_activation: dict[str, datetime] = {}
@@ -37,6 +38,7 @@ class HeroldStore:
         self.queries = data.get("queries") or {}
         self.schedules = data.get("schedules") or {}
         self.todo_items = data.get("todo_items") or []
+        self.dnd_session = data.get("dnd_session")
         self.last_known_room = data.get("last_known_room")
         raw_activity = data.get("last_room_activity")
         self.last_room_activity = (
@@ -62,6 +64,7 @@ class HeroldStore:
             "queries": self.queries,
             "schedules": self.schedules,
             "todo_items": self.todo_items,
+            "dnd_session": self.dnd_session,
             "last_known_room": self.last_known_room,
             "last_room_activity": (
                 self.last_room_activity.isoformat()

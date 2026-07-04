@@ -5,6 +5,8 @@
     "acknowledge": "mdi:comment-check",
     "cancel": "mdi:comment-remove",
     "schedule": "mdi:calendar-clock",
-    "remind_self": "mdi:robot"
+    "remind_self": "mdi:robot",
+    "dnd_on": "mdi:bell-off",
+    "dnd_off": "mdi:bell-ring"
   }
 }

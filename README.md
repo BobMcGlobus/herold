@@ -59,7 +59,12 @@ Alle Sektionen sind später über die Integrations-Optionen editierbar; Räume k
 | P0 Internal Channel (LLM-Self-Callback via `conversation.process`) | ✅ Phase 3 |
 | Native LLM-Tools (`list_pending`, `acknowledge`, `answer_query`, `remind_self`) | ✅ Phase 3 |
 | Todo-Inbox `todo.herold_eingang` für P1-Benachrichtigungen | ✅ Phase 3 |
-| Templates, Rate-Limiting, DND-Sessions, Escalation | 🔜 Phase 4 |
+| Escalation-Chains für unbeantwortete Fragen | ✅ Phase 4 |
+| Voice-Timeout: Buttons gehen nach Telegram, wenn niemand antwortet | ✅ Phase 4 |
+| Rate-Limiting + P2-Aggregation (Anti-Spam) | ✅ Phase 4 |
+| DND-Sessions (`until`, `until_home`) | ✅ Phase 4 |
+| Benachrichtigungs-Vorlagen mit Jinja-Platzhaltern | ✅ Phase 4 |
+| Tests, Lovelace Card, Release-Polish | 🔜 Phase 5 |
 
 Die vollständige Roadmap steht in [HEROLD_PLAN.md](HEROLD_PLAN.md).
 
@@ -116,7 +121,64 @@ Geplante Benachrichtigungen überleben Neustarts; während einer Downtime verpas
 
 Herold registriert eine LLM-API namens **Herold** — aktivierbar pro Conversation-Agent unter *Sprachassistenten → Agent → LLM-APIs*. Tools: `herold_list_pending` („was ist neu?"), `herold_acknowledge` (Todo erledigt), `herold_answer_query` (Antwort auf offene Frage, inkl. Fuzzy-Matching), `herold_remind_self` (zeitversetzte Aufgaben).
 
-**Prompt-Template-Ergänzung für den Agent:** *„Nachrichten mit [HEROLD_INTERNAL] sind interne Reminder von dir selbst. Führe die Anweisung stumm aus, antworte nicht dem User."*
+### System-Prompt-Vorlage (copy-paste in die Agent-Anweisungen)
+
+```yaml
+# In den Optionen des Conversation-Agents unter "Anweisungen" ergänzen:
+
+## Herold — Benachrichtigungssystem des Hauses
+
+Du hast Zugriff auf die Herold-Tools (LLM-API "Herold" muss aktiviert sein):
+
+- Nutze `herold_list_pending`, wenn der User fragt "was ist neu", "gibt es
+  was für mich", "hab ich was verpasst" — und proaktiv am Gesprächsende,
+  wenn etwas offen sein könnte.
+- Nutze `herold_remind_self` für ALLE zeitversetzten Aufgaben ("in einer
+  Stunde", "um 18 Uhr", "morgen früh"). Sage niemals, dass du keine
+  zeitversetzten Aktionen ausführen kannst. Nutze dafür NICHT den
+  Kalender und keine anderen Scheduling-Werkzeuge.
+- Nutze `herold_answer_query`, wenn der User eine offene Frage beantwortet
+  (Ja/Nein fuzzy mappen: "klar" → "Ja", "bloß nicht" → "Nein").
+- Nutze `herold_acknowledge`, wenn der User ein Todo als erledigt meldet.
+
+Nachrichten, die mit [HEROLD_INTERNAL] beginnen, sind interne Reminder von
+dir selbst (früher via herold_remind_self geplant). Führe die Anweisung
+stumm aus und antworte dem User nicht, außer die Anweisung verlangt
+ausdrücklich eine Nachricht oder Durchsage.
+```
+
+**Wichtig für die Migration:** Entferne das alte `script.ai_schedule_command` aus der Assist-Exposure (Einstellungen → Sprachassistenten → Entitäten), sonst greift das LLM weiterhin zum alten Kalender-Workflow statt zu `herold_remind_self`. Die Todos landen übrigens **nicht** im Prompt — `herold_list_pending` ist ein Live-Tool-Call, es gibt kein Caching-Problem.
+
+## Phase-4-Features
+
+**Escalation** (bei `herold.query`): unbeantwortete Fragen werden nach Zeitplan mit höherer Priorität erneut zugestellt:
+
+```yaml
+service: herold.query
+data:
+  question: "Haustür ist offen — soll ich abschließen?"
+  priority: 2
+  voice_timeout_seconds: 60     # keine Voice-Antwort → Buttons nach Telegram
+  escalation:
+    - after_minutes: 5
+      raise_to_priority: 3
+    - after_minutes: 15
+      raise_to_priority: 4
+```
+
+**Rate-Limiting** (automatisch): P3 hat 60 s Cooldown pro Tag/Nachricht (Dedup), P2 max. 3 pro 5 Minuten — Überschuss wird gesammelt und als eine aggregierte Meldung nachgeliefert („3 Meldungen: …"). P4 ist nie limitiert. Bypass per `ignore_rate_limit: true`. Drops sind im `reason`-Attribut von `sensor.herold_letzte_zustellung` sichtbar.
+
+**DND-Sessions:** `herold.dnd_on` mit `until: "+1h"` / `until: "15:30"` oder `until_home: true` — endet automatisch, überlebt Neustarts. `herold.dnd_off` oder der Schalter beenden die Session manuell.
+
+**Vorlagen** (Optionen → Vorlagen): wiederverwendbare Nachrichten mit Jinja-Platzhaltern:
+
+```yaml
+service: herold.send
+data:
+  template: appliance_done      # Vorlage: "{{ appliance }} ist fertig"
+  template_vars:
+    appliance: Waschmaschine
+```
 
 ### Prioritätsmodell
 
@@ -143,7 +205,7 @@ Herold ist als Drop-in-Nachfolger des Omnichannel-Communicator-Scripts konzipier
 ./scripts/setup-dev.sh /pfad/zu/ha-config   # symlinkt die Integration
 ```
 
-Manuelle Testfälle: [PHASE_1_TESTPLAN.md](PHASE_1_TESTPLAN.md) · [PHASE_2_TESTPLAN.md](PHASE_2_TESTPLAN.md) · [PHASE_3_TESTPLAN.md](PHASE_3_TESTPLAN.md)
+Manuelle Testfälle: [PHASE_1_TESTPLAN.md](PHASE_1_TESTPLAN.md) · [PHASE_2_TESTPLAN.md](PHASE_2_TESTPLAN.md) · [PHASE_3_TESTPLAN.md](PHASE_3_TESTPLAN.md) · [PHASE_4_TESTPLAN.md](PHASE_4_TESTPLAN.md)
 
 ## Lizenz
 

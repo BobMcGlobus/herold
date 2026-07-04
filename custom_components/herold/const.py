@@ -57,6 +57,7 @@ CONF_ENABLE_OFFLINE_FALLBACK: Final = "enable_offline_fallback"
 CONF_ENABLE_OFFLINE_QUEUE: Final = "enable_offline_queue"
 CONF_P0_AGENT_ID: Final = "p0_agent_id"
 CONF_P0_FALLBACK_AGENT_ID: Final = "p0_fallback_agent_id"
+CONF_TEMPLATES: Final = "templates"
 
 # Legacy config key (config entry version 1, migrated to flash_entities)
 LEGACY_CONF_LIGHT_ENTITY: Final = "light_entity"
@@ -69,6 +70,12 @@ DEFAULT_CREATE_INTERNAL_SWITCH: Final = True
 DEFAULT_ENABLE_OFFLINE_FALLBACK: Final = False
 DEFAULT_ENABLE_OFFLINE_QUEUE: Final = True
 DEFAULT_QUERY_TIMEOUT_MINUTES: Final = 60
+DEFAULT_VOICE_TIMEOUT_SECONDS: Final = 90
+
+# Rate limiting (per HEROLD_PLAN.md section 13)
+RATE_LIMIT_P3_COOLDOWN_SECONDS: Final = 60
+RATE_LIMIT_P2_MAX_PER_WINDOW: Final = 3
+RATE_LIMIT_P2_WINDOW_SECONDS: Final = 300
 
 # Room router: how long a last-known room stays a valid voice target
 LAST_KNOWN_ROOM_TTL_MINUTES: Final = 15
@@ -113,6 +120,8 @@ SERVICE_ACKNOWLEDGE: Final = "acknowledge"
 SERVICE_CANCEL: Final = "cancel"
 SERVICE_SCHEDULE: Final = "schedule"
 SERVICE_REMIND_SELF: Final = "remind_self"
+SERVICE_DND_ON: Final = "dnd_on"
+SERVICE_DND_OFF: Final = "dnd_off"
 
 ATTR_MESSAGE: Final = "message"
 ATTR_PRIORITY: Final = "priority"
@@ -134,6 +143,13 @@ ATTR_REASON: Final = "reason"
 ATTR_SCHEDULED_FOR: Final = "scheduled_for"
 ATTR_WHEN: Final = "when"
 ATTR_INSTRUCTION: Final = "instruction"
+ATTR_TEMPLATE: Final = "template"
+ATTR_TEMPLATE_VARS: Final = "template_vars"
+ATTR_IGNORE_RATE_LIMIT: Final = "ignore_rate_limit"
+ATTR_VOICE_TIMEOUT_SECONDS: Final = "voice_timeout_seconds"
+ATTR_ESCALATION: Final = "escalation"
+ATTR_UNTIL: Final = "until"
+ATTR_UNTIL_HOME: Final = "until_home"
 
 # Voice channel behavior (ported from the original script)
 ALARM_VOICE_PREFIX: Final = "ACHTUNG! KRITISCHE MELDUNG!"

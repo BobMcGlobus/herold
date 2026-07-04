@@ -93,7 +93,8 @@
           "chat": "Chat (Telegram)",
           "llm": "LLM (internal reminders)",
           "dnd": "Do not disturb",
-          "offline": "Offline behavior"
+          "offline": "Offline behavior",
+          "templates_menu": "Templates (add / edit / remove)"
         }
       },
       "basic": {
@@ -187,6 +188,48 @@
         "data": {
           "room_indexes": "Rooms to remove"
         }
+      },
+      "templates_menu": {
+        "title": "Notification templates",
+        "menu_options": {
+          "template_add": "Add template",
+          "template_edit": "Edit template",
+          "template_remove": "Remove templates",
+          "save": "Save and close"
+        }
+      },
+      "template_add": {
+        "title": "Add template",
+        "description": "message, title and tag render as Jinja templates with the caller's template_vars, e.g. '{{ appliance }} ist fertig'.",
+        "data": {
+          "template_name": "Template name",
+          "message": "Message",
+          "priority": "Priority",
+          "title": "Title",
+          "tag": "Tag"
+        }
+      },
+      "template_edit": {
+        "title": "Edit template",
+        "data": {
+          "template_name": "Template"
+        }
+      },
+      "template_edit_form": {
+        "title": "Edit template",
+        "data": {
+          "template_name": "Template name",
+          "message": "Message",
+          "priority": "Priority",
+          "title": "Title",
+          "tag": "Tag"
+        }
+      },
+      "template_remove": {
+        "title": "Remove templates",
+        "data": {
+          "template_names": "Templates to remove"
+        }
       }
     },
     "error": {
@@ -213,6 +256,9 @@
       },
       "scheduled_count": {
         "name": "Scheduled notifications"
+      },
+      "next_schedule": {
+        "name": "Next schedule"
       }
     },
     "todo": {
@@ -229,6 +275,9 @@
       },
       "any_pending": {
         "name": "Query pending"
+      },
+      "escalation_active": {
+        "name": "Escalation active"
       }
     },
     "button": {
@@ -273,6 +322,18 @@
         "callback_event": {
           "name": "Callback event",
           "description": "Legacy callback event id (only meaningful for queries)."
+        },
+        "template": {
+          "name": "Template",
+          "description": "Name of a notification template (options → templates). Explicit fields override template values."
+        },
+        "template_vars": {
+          "name": "Template variables",
+          "description": "Variables for the template placeholders, e.g. {\"appliance\": \"Waschmaschine\"}."
+        },
+        "ignore_rate_limit": {
+          "name": "Ignore rate limit",
+          "description": "Bypass the per-priority rate limiter for this notification."
         }
       }
     },
@@ -302,11 +363,19 @@
         },
         "timeout_minutes": {
           "name": "Timeout (minutes)",
-          "description": "How long to wait for an answer before expiring."
+          "description": "How long to wait for an answer before expiring (overall, incl. chat)."
+        },
+        "voice_timeout_seconds": {
+          "name": "Voice timeout (seconds)",
+          "description": "If the question was asked via satellite and no answer arrives within this window, the answer buttons are sent to Telegram (default 90 s)."
         },
         "default_answer": {
           "name": "Default answer",
           "description": "Used automatically when the timeout is reached."
+        },
+        "escalation": {
+          "name": "Escalation",
+          "description": "List of rules, e.g. [{\"after_minutes\": 5, \"raise_to_priority\": 3}] — unanswered queries get redelivered at higher priority."
         },
         "recipient": {
           "name": "Recipient",
@@ -397,6 +466,24 @@
           "description": "Self-directed prompt for the agent, e.g. 'Schalte das Wohnzimmerlicht aus.'"
         }
       }
+    },
+    "dnd_on": {
+      "name": "DND on",
+      "description": "Activates do-not-disturb, optionally as a session that ends automatically.",
+      "fields": {
+        "until": {
+          "name": "Until",
+          "description": "'+1h', '15:30' or an ISO datetime — DND ends automatically."
+        },
+        "until_home": {
+          "name": "Until home",
+          "description": "DND ends when the recipient arrives home."
+        }
+      }
+    },
+    "dnd_off": {
+      "name": "DND off",
+      "description": "Deactivates do-not-disturb and ends any running DND session."
     }
   }
 }

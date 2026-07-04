@@ -35,6 +35,7 @@ async def async_setup_entry(
             HeroldOnlineBinarySensor(coordinator),
             HeroldDNDActiveBinarySensor(coordinator),
             HeroldAnyPendingBinarySensor(coordinator),
+            HeroldEscalationActiveBinarySensor(coordinator),
         ]
     )
 
@@ -115,6 +116,39 @@ class HeroldAnyPendingBinarySensor(HeroldEntity, BinarySensorEntity):
     def is_on(self) -> bool:
         """Return True if any query is pending."""
         return bool(self.coordinator.query_manager.pending)
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to query updates."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                signal_query(self.coordinator.entry.entry_id),
+                self._handle_query_update,
+            )
+        )
+
+    @callback
+    def _handle_query_update(self) -> None:
+        self.async_write_ha_state()
+
+
+class HeroldEscalationActiveBinarySensor(HeroldEntity, BinarySensorEntity):
+    """On while a pending query has been escalated at least once."""
+
+    _attr_translation_key = "escalation_active"
+    _attr_icon = "mdi:alert-rhombus"
+
+    def __init__(self, coordinator: HeroldCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_escalation_active"
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if any pending query is escalated."""
+        return any(
+            query.escalated for query in self.coordinator.query_manager.pending
+        )
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to query updates."""
