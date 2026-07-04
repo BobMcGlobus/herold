@@ -7,6 +7,8 @@
   "dependencies": [
     "assist_satellite",
     "conversation",
+    "frontend",
+    "http",
     "media_player",
     "mobile_app",
     "todo",
@@ -17,5 +19,5 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/BobMcGlobus/herold/issues",
   "requirements": [],
-  "version": "0.5.0"
+  "version": "0.6.0"
 }

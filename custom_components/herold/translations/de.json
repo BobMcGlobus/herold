@@ -259,6 +259,9 @@
       },
       "next_schedule": {
         "name": "Nächste Zustellung"
+      },
+      "history": {
+        "name": "Verlauf"
       }
     },
     "todo": {

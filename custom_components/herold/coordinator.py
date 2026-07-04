@@ -43,11 +43,13 @@ from .const import (
     CONF_RECIPIENT,
     CONF_ROOMS,
     EVENT_DELIVERED,
+    HISTORY_MAX_ENTRIES,
     P0_RATE_LIMIT_PER_HOUR,
     TODO_STATUS_DONE,
     TODO_STATUS_OPEN,
     signal_delivery,
     signal_dnd,
+    signal_history,
     signal_todo,
 )
 from .dispatcher import DispatchContext, select_channels, should_deliver
@@ -269,6 +271,21 @@ class HeroldCoordinator:
         self.last_priority = priority
 
     @callback
+    def add_history(self, kind: str, summary: str, **extra: Any) -> None:
+        """Prepend an entry to the history ring buffer."""
+        entry: dict[str, Any] = {
+            "when": dt_util.utcnow().isoformat(),
+            "kind": kind,
+            "summary": summary[:160],
+        }
+        entry.update({key: value for key, value in extra.items() if value})
+        history = self.store.history
+        history.insert(0, entry)
+        del history[HISTORY_MAX_ENTRIES:]
+        self.store.async_schedule_save()
+        async_dispatcher_send(self.hass, signal_history(self.entry.entry_id))
+
+    @callback
     def p0_allowed(self) -> bool:
         """Anti-runaway rate limit for P0 internal triggers (rolling hour)."""
         now = dt_util.utcnow().timestamp()
@@ -393,6 +410,12 @@ class HeroldCoordinator:
             _LOGGER.debug("Dropping notification %s: %s", notification.id, reason)
             result.reason = reason
             self.note_delivery(result, notification.priority)
+            self.add_history(
+                "dropped",
+                notification.message,
+                priority=notification.priority,
+                reason=reason,
+            )
             async_dispatcher_send(self.hass, signal_delivery(self.entry.entry_id))
             return result
 
@@ -405,6 +428,12 @@ class HeroldCoordinator:
             )
             result.reason = limit_reason
             self.note_delivery(result, notification.priority)
+            self.add_history(
+                "rate_limited",
+                notification.message,
+                priority=notification.priority,
+                reason=limit_reason,
+            )
             async_dispatcher_send(self.hass, signal_delivery(self.entry.entry_id))
             return result
 
@@ -448,6 +477,14 @@ class HeroldCoordinator:
                 )
 
         self.note_delivery(result, notification.priority)
+        self.add_history(
+            "delivered",
+            notification.message,
+            priority=notification.priority,
+            channels=result.channels_used,
+            room=result.room_used,
+            errors=result.errors or None,
+        )
         async_dispatcher_send(self.hass, signal_delivery(self.entry.entry_id))
         return result
 

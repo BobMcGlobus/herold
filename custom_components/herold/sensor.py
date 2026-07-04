@@ -8,7 +8,13 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import DOMAIN, signal_delivery, signal_query, signal_schedule
+from .const import (
+    DOMAIN,
+    signal_delivery,
+    signal_history,
+    signal_query,
+    signal_schedule,
+)
 from .entity import HeroldEntity
 
 if TYPE_CHECKING:
@@ -35,6 +41,7 @@ async def async_setup_entry(
             HeroldLastQuerySensor(coordinator),
             HeroldScheduledCountSensor(coordinator),
             HeroldNextScheduleSensor(coordinator),
+            HeroldHistorySensor(coordinator),
         ]
     )
 
@@ -121,6 +128,7 @@ class HeroldPendingCountSensor(HeroldSignalSensor):
                     "id": query.id,
                     "question": query.question,
                     "mode": query.mode,
+                    "choices": query.choices,
                     "priority": query.priority,
                     "created_at": query.created_at.isoformat(),
                 }
@@ -230,3 +238,26 @@ class HeroldNextScheduleSensor(HeroldSignalSensor):
             "message": next_schedule.payload.get("message"),
             "priority": next_schedule.payload.get("priority"),
         }
+
+
+class HeroldHistorySensor(HeroldSignalSensor):
+    """Ring buffer of the last dispatcher events (feeds the dashboard card)."""
+
+    _attr_translation_key = "history"
+    _attr_icon = "mdi:history"
+    _signal = staticmethod(signal_history)
+
+    def __init__(self, coordinator: HeroldCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_history"
+
+    @property
+    def native_value(self) -> str:
+        """Return the kind of the most recent event."""
+        history = self.coordinator.store.history
+        return history[0]["kind"] if history else "none"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose the full ring buffer."""
+        return {"entries": self.coordinator.store.history}

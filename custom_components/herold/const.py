@@ -86,6 +86,13 @@ SCHEDULE_GRACE_MINUTES: Final = 5
 # P0 anti-runaway: max internal triggers per rolling hour
 P0_RATE_LIMIT_PER_HOUR: Final = 20
 
+# History ring buffer (feeds sensor.herold_history and the dashboard card)
+HISTORY_MAX_ENTRIES: Final = 50
+
+# Dashboard card (served from custom_components/herold/frontend/)
+CARD_STATIC_URL: Final = "/herold_static"
+CARD_FILENAME: Final = "herold-card.js"
+
 # Prefix marking conversation.process calls as internal self-callbacks.
 # The LLM prompt template should explain: execute silently, do not reply
 # to the user.
@@ -181,3 +188,8 @@ def signal_schedule(entry_id: str) -> str:
 def signal_todo(entry_id: str) -> str:
     """Dispatcher signal fired when the todo inbox changed."""
     return f"{DOMAIN}_{entry_id}_todo"
+
+
+def signal_history(entry_id: str) -> str:
+    """Dispatcher signal fired when a history entry was added."""
+    return f"{DOMAIN}_{entry_id}_history"

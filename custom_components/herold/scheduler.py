@@ -142,6 +142,12 @@ class HeroldScheduler:
         _LOGGER.debug(
             "Scheduled %s for %s", schedule.id, schedule.scheduled_for
         )
+        self.coordinator.add_history(
+            "scheduled",
+            str(schedule.payload.get("message") or ""),
+            at=schedule.scheduled_for.isoformat(),
+            priority=schedule.payload.get("priority"),
+        )
         self._notify_change()
 
     async def async_cancel(self, schedule_id: str) -> bool:

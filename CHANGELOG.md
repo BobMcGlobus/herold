@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 — Dashboard-Karte & Verlauf
+
+- Lovelace-Karte `custom:herold-card` (automatisch geladen, keine
+  Ressourcen-Config nötig): Inbox mit Antwort-Buttons und Todo-Abhaken,
+  Tab „Geplant" mit Countdown + Cancel, Logbuch-Tab
+- `sensor.*_verlauf`: Ringpuffer der letzten 50 Ereignisse (zugestellt,
+  verworfen mit Grund, Rate-Limit, Frage/Antwort, Eskalation, geplant),
+  persistent über Neustarts
+- Pending-Sensor liefert jetzt auch die `choices` je Frage
+- `TESTING.md`: konsolidierter Testplan mit Copy-Paste-YAML
+
 ## 0.5.0 — Phase 5: Tests & Polish
 
 - pytest-Suite (64 Tests): Dispatcher-Matrix, Room-Router-Konfliktauflösung,

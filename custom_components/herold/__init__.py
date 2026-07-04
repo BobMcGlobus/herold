@@ -3,17 +3,30 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.loader import async_get_integration
 
-from .const import CONF_FLASH_ENTITIES, CONF_ROOMS, DOMAIN, LEGACY_CONF_LIGHT_ENTITY
+from .const import (
+    CARD_FILENAME,
+    CARD_STATIC_URL,
+    CONF_FLASH_ENTITIES,
+    CONF_ROOMS,
+    DOMAIN,
+    LEGACY_CONF_LIGHT_ENTITY,
+)
 from .coordinator import HeroldCoordinator
 from .services import async_register_services, async_unregister_services
 
 _LOGGER = logging.getLogger(__name__)
+
+_CARD_REGISTERED_KEY = f"{DOMAIN}_card_registered"
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -26,6 +39,8 @@ PLATFORMS: list[Platform] = [
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Herold from a config entry."""
+    await _async_register_card(hass)
+
     coordinator = HeroldCoordinator(hass, entry)
     await coordinator.async_setup()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
@@ -35,6 +50,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
+
+
+async def _async_register_card(hass: HomeAssistant) -> None:
+    """Serve and auto-load the dashboard card (no manual resource needed)."""
+    if hass.data.get(_CARD_REGISTERED_KEY):
+        return
+    hass.data[_CARD_REGISTERED_KEY] = True
+    await hass.http.async_register_static_paths(
+        [
+            StaticPathConfig(
+                CARD_STATIC_URL,
+                str(Path(__file__).parent / "frontend"),
+                cache_headers=False,
+            )
+        ]
+    )
+    integration = await async_get_integration(hass, DOMAIN)
+    add_extra_js_url(
+        hass, f"{CARD_STATIC_URL}/{CARD_FILENAME}?v={integration.version}"
+    )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

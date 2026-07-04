@@ -259,6 +259,9 @@
       },
       "next_schedule": {
         "name": "Next schedule"
+      },
+      "history": {
+        "name": "History"
       }
     },
     "todo": {

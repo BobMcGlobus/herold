@@ -198,6 +198,13 @@ class QueryManager:
         self._arm_voice_fallback(query)
         self._persist(query)
         coordinator.note_delivery(result, query.priority)
+        coordinator.add_history(
+            "query",
+            query.question,
+            priority=query.priority,
+            channels=result.channels_used,
+            mode=query.mode,
+        )
         async_dispatcher_send(
             coordinator.hass, signal_delivery(coordinator.entry.entry_id)
         )
@@ -251,6 +258,9 @@ class QueryManager:
         _LOGGER.debug(
             "Query %s answered %r via %s", query.id, answer, source
         )
+        self.coordinator.add_history(
+            "answered", query.question, answer=answer, source=source
+        )
         self._notify_change()
         return query
 
@@ -261,6 +271,7 @@ class QueryManager:
         self._cancel_timer(query.id)
         self._persist(query)
         _LOGGER.debug("Query %s cancelled: %s", query.id, reason or "no reason")
+        self.coordinator.add_history("cancelled", query.question, reason=reason)
         self._notify_change()
 
     def _get_pending(self, query_id: str) -> Query:
@@ -411,6 +422,12 @@ class QueryManager:
         _LOGGER.debug(
             "Query %s escalated P%s → P%s", query.id, old_priority, new_priority
         )
+        self.coordinator.add_history(
+            "escalated",
+            query.question,
+            from_priority=old_priority,
+            to_priority=new_priority,
+        )
         self._notify_change()
 
     async def _async_timeout(self, query: Query) -> None:
@@ -431,6 +448,7 @@ class QueryManager:
             EVENT_EXPIRED, {ATTR_ID: query.id, "reason": "timeout"}
         )
         _LOGGER.debug("Query %s expired", query.id)
+        self.coordinator.add_history("expired", query.question)
         self._notify_change()
 
     # -- Telegram answer sources -------------------------------------------

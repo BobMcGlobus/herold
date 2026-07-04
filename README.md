@@ -65,7 +65,8 @@ Alle Sektionen sind später über die Integrations-Optionen editierbar; Räume k
 | DND-Sessions (`until`, `until_home`) | ✅ Phase 4 |
 | Benachrichtigungs-Vorlagen mit Jinja-Platzhaltern | ✅ Phase 4 |
 | pytest-Suite (Dispatcher, Router, Legacy-Kompat, Limiter, …) | ✅ Phase 5 |
-| Lovelace Card, Offline-Queue, Multi-User | 🔜 Backlog |
+| Dashboard-Karte (Inbox / Geplant / Logbuch) + Verlauf-Sensor | ✅ v0.6.0 |
+| Offline-Queue, Multi-User | 🔜 Backlog |
 
 Die vollständige Roadmap steht in [HEROLD_PLAN.md](HEROLD_PLAN.md).
 
@@ -150,6 +151,23 @@ ausdrücklich eine Nachricht oder Durchsage.
 
 **Wichtig für die Migration:** Entferne das alte `script.ai_schedule_command` aus der Assist-Exposure (Einstellungen → Sprachassistenten → Entitäten), sonst greift das LLM weiterhin zum alten Kalender-Workflow statt zu `herold_remind_self`. Die Todos landen übrigens **nicht** im Prompt — `herold_list_pending` ist ein Live-Tool-Call, es gibt kein Caching-Problem.
 
+## Dashboard-Karte
+
+Herold bringt eine eigene Lovelace-Karte mit — sie wird von der Integration automatisch als Ressource geladen, kein manuelles Registrieren nötig. Einfach im Dashboard **Karte hinzufügen → „Herold Card"** wählen oder per YAML:
+
+```yaml
+type: custom:herold-card
+title: Herold
+```
+
+Drei Tabs:
+
+- **📥 Inbox** — offene Fragen mit Antwort-Buttons (Ja/Nein bzw. Choice-Optionen direkt klickbar) und die Todo-Liste mit Abhaken/Löschen
+- **🕐 Geplant** — anstehende Zustellungen mit Countdown und Cancel-Button
+- **📜 Logbuch** — die letzten 50 Ereignisse (zugestellt, verworfen inkl. Grund, beantwortet, eskaliert, Rate-Limit, …) aus `sensor.herold_verlauf` — überlebt Neustarts
+
+Die Entities werden automatisch erkannt; bei Bedarf per `todo_entity`, `pending_entity`, `scheduled_entity`, `history_entity` überschreibbar.
+
 ## Phase-4-Features
 
 **Escalation** (bei `herold.query`): unbeantwortete Fragen werden nach Zeitplan mit höherer Priorität erneut zugestellt:
@@ -206,7 +224,7 @@ Herold ist als Drop-in-Nachfolger des Omnichannel-Communicator-Scripts konzipier
 ./scripts/setup-dev.sh /pfad/zu/ha-config   # symlinkt die Integration
 ```
 
-Manuelle Testfälle: [PHASE_1_TESTPLAN.md](PHASE_1_TESTPLAN.md) · [PHASE_2_TESTPLAN.md](PHASE_2_TESTPLAN.md) · [PHASE_3_TESTPLAN.md](PHASE_3_TESTPLAN.md) · [PHASE_4_TESTPLAN.md](PHASE_4_TESTPLAN.md)
+Manuelle Testfälle: **[TESTING.md](TESTING.md)** (konsolidiert, mit Copy-Paste-YAML) · Archiv: [Phase 1](PHASE_1_TESTPLAN.md) · [Phase 2](PHASE_2_TESTPLAN.md) · [Phase 3](PHASE_3_TESTPLAN.md) · [Phase 4](PHASE_4_TESTPLAN.md)
 
 ## Lizenz
 
