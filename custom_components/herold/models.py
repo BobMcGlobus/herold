@@ -11,6 +11,8 @@ from homeassistant.const import STATE_ON
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    ALARM_STATUS_ARMED,
+    DEFAULT_ALARM_MESSAGE,
     DEFAULT_PRIORITY,
     DEFAULT_PRIORITY_WEIGHT,
     DEFAULT_QUERY_TIMEOUT_MINUTES,
@@ -21,6 +23,7 @@ from .const import (
     VOLUME_LOUD,
     VOLUME_NORMAL,
     VOLUME_QUIET,
+    WEEKDAYS,
 )
 
 if TYPE_CHECKING:
@@ -231,6 +234,105 @@ class Schedule:
             scheduled_for=_parse_datetime(data["scheduled_for"])
             or dt_util.utcnow(),
             payload=data.get("payload") or {},
+            created_at=_parse_datetime(data.get("created_at")) or dt_util.utcnow(),
+        )
+
+
+@dataclass(kw_only=True)
+class Alarm:
+    """An alarm clock entry: one-shot or repeating on weekdays."""
+
+    time: str  # "HH:MM" in local time
+    id: str = field(default_factory=_new_id)
+    days: list[str] = field(default_factory=list)  # empty = one-shot
+    label: str | None = None
+    message: str = DEFAULT_ALARM_MESSAGE
+    enabled: bool = True
+    status: str = ALARM_STATUS_ARMED
+    next_trigger: datetime | None = None
+    rings: int = 0
+    created_at: datetime = field(default_factory=dt_util.utcnow)
+
+    @property
+    def is_repeating(self) -> bool:
+        """Return True if the alarm repeats on weekdays."""
+        return bool(self.days)
+
+    def next_occurrence(self, after: datetime | None = None) -> datetime | None:
+        """Return the next UTC firing time, or None if it cannot repeat."""
+        parsed = dt_util.parse_time(self.time)
+        if parsed is None:
+            return None
+        reference = dt_util.as_local(after or dt_util.utcnow())
+        candidate = reference.replace(
+            hour=parsed.hour,
+            minute=parsed.minute,
+            second=0,
+            microsecond=0,
+        )
+        if candidate <= reference:
+            candidate += timedelta(days=1)
+        if self.is_repeating:
+            for _ in range(8):
+                if WEEKDAYS[candidate.weekday()] in self.days:
+                    break
+                candidate += timedelta(days=1)
+            else:
+                return None
+        return dt_util.as_utc(candidate)
+
+    def describe(self) -> str:
+        """Return a German phrase describing when this alarm rings."""
+        if not self.is_repeating:
+            return f"einmalig um {self.time} Uhr"
+        if set(self.days) == set(WEEKDAYS):
+            return f"täglich um {self.time} Uhr"
+        if set(self.days) == set(WEEKDAYS[:5]):
+            return f"werktags um {self.time} Uhr"
+        names = {
+            "mon": "Mo",
+            "tue": "Di",
+            "wed": "Mi",
+            "thu": "Do",
+            "fri": "Fr",
+            "sat": "Sa",
+            "sun": "So",
+        }
+        listed = ", ".join(
+            names[day] for day in WEEKDAYS if day in self.days
+        )
+        return f"{listed} um {self.time} Uhr"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for the persistence store."""
+        return {
+            "id": self.id,
+            "time": self.time,
+            "days": self.days,
+            "label": self.label,
+            "message": self.message,
+            "enabled": self.enabled,
+            "status": self.status,
+            "next_trigger": (
+                self.next_trigger.isoformat() if self.next_trigger else None
+            ),
+            "rings": self.rings,
+            "created_at": self.created_at.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Alarm:
+        """Deserialize from a persistence store payload."""
+        return cls(
+            id=data["id"],
+            time=data["time"],
+            days=list(data.get("days") or []),
+            label=data.get("label"),
+            message=data.get("message", DEFAULT_ALARM_MESSAGE),
+            enabled=data.get("enabled", True),
+            status=data.get("status", ALARM_STATUS_ARMED),
+            next_trigger=_parse_datetime(data.get("next_trigger")),
+            rings=data.get("rings", 0),
             created_at=_parse_datetime(data.get("created_at")) or dt_util.utcnow(),
         )
 

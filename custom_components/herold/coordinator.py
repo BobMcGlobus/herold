@@ -21,6 +21,7 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
+from .alarm import AlarmManager
 from .channels import (
     BaseChannel,
     ChannelUnavailable,
@@ -40,6 +41,7 @@ from .const import (
     CONF_EXTERNAL_DND_ENTITY,
     CONF_FALLBACK_TTS,
     CONF_INTERNET_SENSOR,
+    CONF_PRIMARY_TTS,
     CONF_RECIPIENT,
     CONF_ROOMS,
     EVENT_DELIVERED,
@@ -96,6 +98,7 @@ class HeroldCoordinator:
         self.query_manager = QueryManager(self)
         self.scheduler = HeroldScheduler(self)
         self.watcher = HeroldWatcher(self)
+        self.alarms = AlarmManager(self)
         self.rate_limiter = RateLimiter(self)
         self.volume = VolumeController(hass)
         self.last_result: DeliveryResult | None = None
@@ -151,6 +154,7 @@ class HeroldCoordinator:
         await self.query_manager.async_setup()
         await self.scheduler.async_setup()
         await self.watcher.async_setup()
+        await self.alarms.async_setup()
         self._async_restore_dnd_session()
 
         self._unsubs.append(
@@ -159,6 +163,7 @@ class HeroldCoordinator:
 
     async def async_shutdown(self) -> None:
         """Detach listeners and flush the store on unload."""
+        await self.alarms.async_shutdown()
         await self.watcher.async_shutdown()
         await self.scheduler.async_shutdown()
         await self.query_manager.async_shutdown()
@@ -522,3 +527,61 @@ class HeroldCoordinator:
     async def async_ask(self, query: Query) -> DeliveryResult:
         """Run the dispatch pipeline for a query."""
         return await self.query_manager.async_ask(query)
+
+    async def async_ring_alarm(
+        self,
+        message: str,
+        ramp: float,
+        priority: int,
+        volume_level: str,
+        flash: bool,
+    ) -> None:
+        """Speak an alarm ring in the sleeping area, bypassing DND rules.
+
+        The alarm deliberately does not go through the dispatcher: it must
+        ignore DND, quiet hours and the rate limiter, and it ramps the
+        configured loud volume up over successive rings.
+        """
+        room = await self.async_get_active_room()
+        if room is None:
+            _LOGGER.debug("Alarm ring: no room available, falling back to push")
+            await self.channels[CHANNEL_PUSH].deliver(
+                Notification(message=message, priority=priority), self
+            )
+            return
+
+        if flash:
+            for entity_id in room.flash_entities:
+                service = "turn_on"
+                domain = "scene" if entity_id.startswith("scene.") else "light"
+                data: dict[str, Any] = {"entity_id": entity_id}
+                if domain == "light":
+                    # Sunrise-ish rather than the P4 red strobe.
+                    data.update({"brightness_pct": 60, "transition": 30})
+                await self.hass.services.async_call(
+                    domain, service, data, blocking=False
+                )
+
+        base = room.volume_for(volume_level)
+        volume = round(base * ramp, 3) if base is not None else None
+        player = room.media_player_entity
+
+        async with self.volume.announce_at(player, volume):
+            if room.sat_entity:
+                await self.hass.services.async_call(
+                    "assist_satellite",
+                    "announce",
+                    {"entity_id": room.sat_entity, "message": message},
+                    blocking=True,
+                )
+            elif player:
+                await self.hass.services.async_call(
+                    "tts",
+                    "speak",
+                    {
+                        "entity_id": self.config.get(CONF_PRIMARY_TTS),
+                        "media_player_entity_id": player,
+                        "message": message,
+                    },
+                    blocking=True,
+                )

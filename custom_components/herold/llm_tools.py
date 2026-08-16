@@ -18,6 +18,7 @@ import voluptuous as vol
 
 from .const import (
     CONF_ENABLE_TOOL_CONFIRMATIONS,
+    DEFAULT_ALARM_MESSAGE,
     DEFAULT_ENABLE_TOOL_CONFIRMATIONS,
     DEFAULT_PRIORITY,
     DEFAULT_WATCH_TTL_HOURS,
@@ -25,8 +26,9 @@ from .const import (
     MAX_WATCH_TTL_HOURS,
     PRIORITY_INTERNAL,
     TODO_STATUS_OPEN,
+    WEEKDAYS,
 )
-from .models import Schedule, Watch
+from .models import Alarm, Schedule, Watch
 from .scheduler import parse_when
 from .watcher import ttl_to_expiry
 
@@ -51,6 +53,10 @@ API_PROMPT = (
     "time and the fact that it is stored). The user must always know whether "
     "something was really registered. If a tool returns success=false, tell "
     "the user plainly that it did NOT work and why."
+    "\n\nHerold also manages the alarm clocks (herold_set_alarm, "
+    "herold_list_alarms, herold_cancel_alarm). When an alarm is ringing the "
+    "user can say 'aus'/'stopp' or 'snooze' — those are handled by Herold "
+    "itself, do not call a tool for them."
 )
 
 _WEEKDAYS = (
@@ -101,6 +107,9 @@ class HeroldAPI(llm.API):
                 RemindSelfTool(self.coordinator),
                 RemindWhenTool(self.coordinator),
                 CancelTool(self.coordinator),
+                ListAlarmsTool(self.coordinator),
+                SetAlarmTool(self.coordinator),
+                CancelAlarmTool(self.coordinator),
             ],
         )
 
@@ -393,4 +402,97 @@ class CancelTool(HeroldTool):
             )
         return self._confirm(
             {"success": True, "id": item_id}, "Erledigt, das ist gestrichen."
+        )
+
+
+class ListAlarmsTool(HeroldTool):
+    """List the configured alarm clocks."""
+
+    name = "herold_list_alarms"
+    description = (
+        "List all alarm clocks with their id, time, repeat days and status. "
+        "Call this when the user asks 'wann klingelt mein Wecker', 'welche "
+        "Wecker habe ich', 'ist ein Wecker gestellt', or before changing an "
+        "alarm so you know which one is meant."
+    )
+    parameters = vol.Schema({})
+
+    async def _run(self, **kwargs: Any) -> dict[str, Any]:
+        return {
+            "alarms": [
+                {
+                    "id": alarm.id,
+                    "time": alarm.time,
+                    "schedule": alarm.describe(),
+                    "label": alarm.label,
+                    "status": alarm.status,
+                }
+                for alarm in self.coordinator.alarms.active
+            ]
+        }
+
+
+class SetAlarmTool(HeroldTool):
+    """Create an alarm clock."""
+
+    name = "herold_set_alarm"
+    description = (
+        "Set an alarm clock. Use for 'stell mir einen Wecker für 7 Uhr', "
+        "'weck mich morgen um halb acht', 'jeden Werktag um 6:30 wecken'. "
+        "\n\nParameters: time as 'HH:MM' in 24h format; days as a list of "
+        "'mon','tue','wed','thu','fri','sat','sun' for a repeating alarm "
+        "(omit for a one-shot alarm tomorrow or later today); optional label "
+        "('Arbeit') and message (what Herold says when it rings). "
+        "\n\nRead the returned 'confirmation' back to the user."
+    )
+    parameters = vol.Schema(
+        {
+            vol.Required("time"): str,
+            vol.Optional("days"): [str],
+            vol.Optional("label"): str,
+            vol.Optional("message"): str,
+        }
+    )
+
+    async def _run(self, **kwargs: Any) -> dict[str, Any]:
+        days = [day.lower()[:3] for day in kwargs.get("days") or []]
+        if invalid := [day for day in days if day not in WEEKDAYS]:
+            raise HomeAssistantError(
+                f"Invalid weekday(s): {invalid} — use mon/tue/wed/thu/fri/sat/sun"
+            )
+        alarm = Alarm(
+            time=kwargs["time"],
+            days=days,
+            label=kwargs.get("label"),
+            message=kwargs.get("message") or DEFAULT_ALARM_MESSAGE,
+        )
+        await self.coordinator.alarms.async_add(alarm)
+        return self._confirm(
+            {
+                "success": True,
+                "id": alarm.id,
+                "schedule": alarm.describe(),
+            },
+            f"Wecker gestellt: {alarm.describe()}.",
+        )
+
+
+class CancelAlarmTool(HeroldTool):
+    """Delete an alarm clock."""
+
+    name = "herold_cancel_alarm"
+    description = (
+        "Delete an alarm clock by its id ('lösch den Wecker', 'ich brauche "
+        "morgen keinen Wecker'). Get the id from herold_list_alarms first; "
+        "if more than one could be meant, ask which one. To silence an alarm "
+        "that is ringing right now, this is the wrong tool — the user should "
+        "say 'aus' or 'snooze' and you should not call anything."
+    )
+    parameters = vol.Schema({vol.Required("id"): str})
+
+    async def _run(self, **kwargs: Any) -> dict[str, Any]:
+        if not await self.coordinator.alarms.async_cancel(kwargs["id"]):
+            raise HomeAssistantError(f"Unknown alarm id: {kwargs['id']}")
+        return self._confirm(
+            {"success": True, "id": kwargs["id"]}, "Der Wecker ist gelöscht."
         )

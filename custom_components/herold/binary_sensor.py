@@ -12,7 +12,13 @@ from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_track_state_change_event
 
-from .const import CONF_INTERNET_SENSOR, DOMAIN, signal_dnd, signal_query
+from .const import (
+    CONF_INTERNET_SENSOR,
+    DOMAIN,
+    signal_alarm,
+    signal_dnd,
+    signal_query,
+)
 from .entity import HeroldEntity
 
 if TYPE_CHECKING:
@@ -36,6 +42,7 @@ async def async_setup_entry(
             HeroldDNDActiveBinarySensor(coordinator),
             HeroldAnyPendingBinarySensor(coordinator),
             HeroldEscalationActiveBinarySensor(coordinator),
+            HeroldAlarmRingingBinarySensor(coordinator),
         ]
     )
 
@@ -163,4 +170,48 @@ class HeroldEscalationActiveBinarySensor(HeroldEntity, BinarySensorEntity):
 
     @callback
     def _handle_query_update(self) -> None:
+        self.async_write_ha_state()
+
+
+class HeroldAlarmRingingBinarySensor(HeroldEntity, BinarySensorEntity):
+    """On while an alarm is ringing — a trigger surface for automations."""
+
+    _attr_translation_key = "alarm_ringing"
+    _attr_icon = "mdi:alarm-bell"
+
+    def __init__(self, coordinator: HeroldCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_alarm_ringing"
+
+    @property
+    def is_on(self) -> bool:
+        """Return True while an alarm rings."""
+        return self.coordinator.alarms.ringing is not None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str | int | None]:
+        """Expose which alarm is ringing."""
+        alarm = self.coordinator.alarms.ringing
+        if alarm is None:
+            return {}
+        return {
+            "id": alarm.id,
+            "label": alarm.label,
+            "time": alarm.time,
+            "rings": alarm.rings,
+        }
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to alarm updates."""
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                signal_alarm(self.coordinator.entry.entry_id),
+                self._handle_alarm_update,
+            )
+        )
+
+    @callback
+    def _handle_alarm_update(self) -> None:
         self.async_write_ha_state()

@@ -285,6 +285,9 @@
       },
       "watch_count": {
         "name": "Armed watches"
+      },
+      "next_alarm": {
+        "name": "Next alarm"
       }
     },
     "todo": {
@@ -304,6 +307,9 @@
       },
       "escalation_active": {
         "name": "Escalation active"
+      },
+      "alarm_ringing": {
+        "name": "Alarm ringing"
       }
     },
     "button": {
@@ -564,6 +570,62 @@
     "dnd_off": {
       "name": "DND off",
       "description": "Deactivates do-not-disturb and ends any running DND session."
+    },
+    "alarm_set": {
+      "name": "Set alarm",
+      "description": "Creates an alarm clock. Without days it is a one-shot alarm at the next occurrence of that time.",
+      "fields": {
+        "time": {
+          "name": "Time",
+          "description": "Alarm time in 24h format, e.g. 07:00."
+        },
+        "days": {
+          "name": "Days",
+          "description": "Weekdays for a repeating alarm; empty means one-shot."
+        },
+        "label": {
+          "name": "Label",
+          "description": "Optional name, e.g. 'Work'."
+        },
+        "message": {
+          "name": "Message",
+          "description": "What Herold says when the alarm rings."
+        }
+      }
+    },
+    "alarm_cancel": {
+      "name": "Delete alarm",
+      "description": "Removes an alarm clock entirely.",
+      "fields": {
+        "id": {
+          "name": "Alarm ID",
+          "description": "The id of the alarm."
+        }
+      }
+    },
+    "alarm_snooze": {
+      "name": "Snooze alarm",
+      "description": "Snoozes the ringing alarm.",
+      "fields": {
+        "id": {
+          "name": "Alarm ID",
+          "description": "Defaults to the currently ringing alarm."
+        },
+        "minutes": {
+          "name": "Minutes",
+          "description": "Snooze duration; defaults to the configured value."
+        }
+      }
+    },
+    "alarm_dismiss": {
+      "name": "Dismiss alarm",
+      "description": "Stops the ringing alarm and arms the next occurrence.",
+      "fields": {
+        "id": {
+          "name": "Alarm ID",
+          "description": "Defaults to the currently ringing alarm."
+        }
+      }
     }
   }
 }

@@ -65,7 +65,11 @@ Alle Sektionen sind später über die Integrations-Optionen editierbar; Räume k
 | DND-Sessions (`until`, `until_home`) | ✅ Phase 4 |
 | Benachrichtigungs-Vorlagen mit Jinja-Platzhaltern | ✅ Phase 4 |
 | pytest-Suite (Dispatcher, Router, Legacy-Kompat, Limiter, …) | ✅ Phase 5 |
-| Dashboard-Karte (Inbox / Geplant / Logbuch) + Verlauf-Sensor | ✅ v0.6.0 |
+| Dashboard-Karte (Inbox / Geplant / Wecker / Logbuch) + Verlauf | ✅ v0.6.0 |
+| Antwort-Auswertung + Selbstkontrolle für LLM-Anweisungen | ✅ v0.7.0 |
+| Ereignis-Trigger (`herold.watch`, `herold_remind_when`) | ✅ v0.8.0 |
+| Lautstärkestufen pro Raum + Ruhezeiten | ✅ v0.9.0 |
+| Wecker mit Ramp-up, Snooze und Automation-Hooks | ✅ v1.0.0 |
 | Offline-Queue, Multi-User | 🔜 Backlog |
 
 Die vollständige Roadmap steht in [HEROLD_PLAN.md](HEROLD_PLAN.md).
@@ -156,6 +160,25 @@ ausdrücklich eine Nachricht oder Durchsage.
 ```
 
 **Wichtig für die Migration:** Entferne das alte `script.ai_schedule_command` aus der Assist-Exposure (Einstellungen → Sprachassistenten → Entitäten), sonst greift das LLM weiterhin zum alten Kalender-Workflow statt zu `herold_remind_self`. Die Todos landen übrigens **nicht** im Prompt — `herold_list_pending` ist ein Live-Tool-Call, es gibt kein Caching-Problem.
+
+## Wecker
+
+Herold weckt im Raum, in dem du bist, und nutzt dafür die konfigurierten Lautstärken und Alarm-Lichter:
+
+```yaml
+service: herold.alarm_set
+data:
+  time: "06:30"
+  days: [mon, tue, wed, thu, fri]   # weglassen = einmalig
+  label: Arbeit
+  message: Guten Morgen! Zeit aufzustehen.
+```
+
+Beim Klingeln fährt die Lautstärke über mehrere Durchgänge sanft hoch (35 % → 100 % der „laut"-Stufe), die Alarm-Lichter des Raums dimmen über 30 Sekunden auf 60 % hoch, und der Wecker klingelt alle 45 Sekunden weiter, bis du ihn beendest — nach fünf Durchgängen gibt er auf. Weckrufe ignorieren bewusst DND, Ruhezeiten und Rate-Limiting.
+
+**Steuerung:** `herold.alarm_snooze` (Standard 9 min), `herold.alarm_dismiss`, `herold.alarm_cancel`. Ohne `id` beziehen sich Snooze und Dismiss auf den gerade klingelnden Wecker. In der Karte gibt es dafür den Tab **⏰ Wecker** mit Schlummer- und Aus-Buttons.
+
+**Für Automationen:** `sensor.herold_naechster_wecker` (Timestamp — als Trigger nutzbar), `binary_sensor.herold_wecker_klingelt`, plus die Events `herold_alarm_set`, `herold_alarm_triggered`, `herold_alarm_snoozed`, `herold_alarm_dismissed`. Das LLM kann Wecker über `herold_set_alarm`, `herold_list_alarms` und `herold_cancel_alarm` verwalten („Stell mir einen Wecker für halb sieben").
 
 ## Lautstärke & Ruhezeiten
 

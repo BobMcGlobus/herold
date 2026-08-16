@@ -16,6 +16,7 @@ from .const import (
     ATTR_BELOW,
     ATTR_CALLBACK_EVENT,
     ATTR_CHOICES,
+    ATTR_DAYS,
     ATTR_DEFAULT_ANSWER,
     ATTR_ENTITY_ID,
     ATTR_ESCALATION,
@@ -23,7 +24,9 @@ from .const import (
     ATTR_ID,
     ATTR_IGNORE_RATE_LIMIT,
     ATTR_INSTRUCTION,
+    ATTR_LABEL,
     ATTR_MESSAGE,
+    ATTR_MINUTES,
     ATTR_MODE,
     ATTR_PRIORITY,
     ATTR_QUESTION,
@@ -36,6 +39,7 @@ from .const import (
     ATTR_TASK_CONTEXT,
     ATTR_TEMPLATE,
     ATTR_TEMPLATE_VARS,
+    ATTR_TIME,
     ATTR_TIMEOUT_MINUTES,
     ATTR_TITLE,
     ATTR_TO_STATE,
@@ -46,6 +50,7 @@ from .const import (
     ATTR_VOICE_TIMEOUT_SECONDS,
     ATTR_WHEN,
     CONF_RECIPIENT,
+    DEFAULT_ALARM_MESSAGE,
     DEFAULT_PRIORITY,
     DEFAULT_QUERY_TIMEOUT_MINUTES,
     DEFAULT_WATCH_TTL_HOURS,
@@ -56,6 +61,10 @@ from .const import (
     QUERY_MODE_CHOICE,
     QUERY_MODES,
     SERVICE_ACKNOWLEDGE,
+    SERVICE_ALARM_CANCEL,
+    SERVICE_ALARM_DISMISS,
+    SERVICE_ALARM_SET,
+    SERVICE_ALARM_SNOOZE,
     SERVICE_CANCEL,
     SERVICE_DND_OFF,
     SERVICE_DND_ON,
@@ -64,8 +73,9 @@ from .const import (
     SERVICE_SCHEDULE,
     SERVICE_SEND,
     SERVICE_WATCH,
+    WEEKDAYS,
 )
-from .models import Notification, Query, Schedule, Watch
+from .models import Alarm, Notification, Query, Schedule, Watch
 from .scheduler import parse_when
 from .templates import resolve_template
 from .watcher import ttl_to_expiry
@@ -146,6 +156,28 @@ WATCH_SCHEMA = vol.Schema(
         vol.Optional(ATTR_TASK_CONTEXT): cv.string,
     }
 )
+
+ALARM_SET_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_TIME): cv.string,
+        vol.Optional(ATTR_DAYS): vol.All(cv.ensure_list, [vol.In(WEEKDAYS)]),
+        vol.Optional(ATTR_LABEL): cv.string,
+        vol.Optional(ATTR_MESSAGE, default=DEFAULT_ALARM_MESSAGE): cv.string,
+    }
+)
+
+ALARM_ID_SCHEMA = vol.Schema({vol.Required(ATTR_ID): cv.string})
+
+ALARM_SNOOZE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_ID): cv.string,
+        vol.Optional(ATTR_MINUTES): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=120)
+        ),
+    }
+)
+
+ALARM_DISMISS_SCHEMA = vol.Schema({vol.Optional(ATTR_ID): cv.string})
 
 DND_ON_SCHEMA = vol.Schema(
     {
@@ -351,6 +383,39 @@ async def _async_handle_watch(call: ServiceCall) -> None:
     await coordinator.watcher.async_add(watch)
 
 
+async def _async_handle_alarm_set(call: ServiceCall) -> None:
+    """Handle herold.alarm_set."""
+    coordinator = _get_coordinator(call.hass)
+    alarm = Alarm(
+        time=call.data[ATTR_TIME],
+        days=list(call.data.get(ATTR_DAYS) or []),
+        label=call.data.get(ATTR_LABEL),
+        message=call.data[ATTR_MESSAGE],
+    )
+    await coordinator.alarms.async_add(alarm)
+
+
+async def _async_handle_alarm_cancel(call: ServiceCall) -> None:
+    """Handle herold.alarm_cancel."""
+    coordinator = _get_coordinator(call.hass)
+    if not await coordinator.alarms.async_cancel(call.data[ATTR_ID]):
+        raise HomeAssistantError(f"Unknown alarm id: {call.data[ATTR_ID]}")
+
+
+async def _async_handle_alarm_snooze(call: ServiceCall) -> None:
+    """Handle herold.alarm_snooze."""
+    coordinator = _get_coordinator(call.hass)
+    await coordinator.alarms.async_snooze(
+        call.data.get(ATTR_ID), call.data.get(ATTR_MINUTES)
+    )
+
+
+async def _async_handle_alarm_dismiss(call: ServiceCall) -> None:
+    """Handle herold.alarm_dismiss."""
+    coordinator = _get_coordinator(call.hass)
+    await coordinator.alarms.async_dismiss(call.data.get(ATTR_ID))
+
+
 async def _async_handle_dnd_on(call: ServiceCall) -> None:
     """Handle herold.dnd_on (optionally as a session with an end condition)."""
     coordinator = _get_coordinator(call.hass)
@@ -378,6 +443,10 @@ _SERVICES = (
     (SERVICE_SCHEDULE, _async_handle_schedule, SCHEDULE_SCHEMA),
     (SERVICE_REMIND_SELF, _async_handle_remind_self, REMIND_SELF_SCHEMA),
     (SERVICE_WATCH, _async_handle_watch, WATCH_SCHEMA),
+    (SERVICE_ALARM_SET, _async_handle_alarm_set, ALARM_SET_SCHEMA),
+    (SERVICE_ALARM_CANCEL, _async_handle_alarm_cancel, ALARM_ID_SCHEMA),
+    (SERVICE_ALARM_SNOOZE, _async_handle_alarm_snooze, ALARM_SNOOZE_SCHEMA),
+    (SERVICE_ALARM_DISMISS, _async_handle_alarm_dismiss, ALARM_DISMISS_SCHEMA),
     (SERVICE_DND_ON, _async_handle_dnd_on, DND_ON_SCHEMA),
     (SERVICE_DND_OFF, _async_handle_dnd_off, DND_OFF_SCHEMA),
 )

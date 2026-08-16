@@ -34,6 +34,10 @@
     internal: { icon: "🤖", label: "Intern ausgeführt" },
     internal_failed: { icon: "🤖", label: "Intern fehlgeschlagen" },
     watch_armed: { icon: "👁", label: "Beobachtung gesetzt" },
+    alarm_set: { icon: "⏰", label: "Wecker gestellt" },
+    alarm_triggered: { icon: "⏰", label: "Wecker klingelt" },
+    alarm_snoozed: { icon: "😴", label: "Wecker geschlummert" },
+    alarm_dismissed: { icon: "☀️", label: "Wecker beendet" },
   };
 
   const STATUS_LABEL = {
@@ -109,6 +113,7 @@
         ids.scheduled && hass.states[ids.scheduled]?.last_updated,
         ids.history && hass.states[ids.history]?.last_updated,
         ids.watches && hass.states[ids.watches]?.last_updated,
+        ids.alarms && hass.states[ids.alarms]?.last_updated,
         this._todoFingerprint,
         this._todoItems.length,
       ].join("|");
@@ -135,6 +140,7 @@
         scheduled: cfg.scheduled_entity || find("sensor.", "schedules"),
         history: cfg.history_entity || find("sensor.", "entries"),
         watches: cfg.watches_entity || find("sensor.", "watches"),
+        alarms: cfg.alarms_entity || find("sensor.", "alarms"),
       };
       this._idsIncomplete = Object.values(this._ids).some((id) => !id);
       return this._ids;
@@ -186,6 +192,12 @@
           });
         } else if (action === "cancel") {
           this._hass.callService("herold", "cancel", { id });
+        } else if (action === "alarm-cancel") {
+          this._hass.callService("herold", "alarm_cancel", { id });
+        } else if (action === "alarm-snooze") {
+          this._hass.callService("herold", "alarm_snooze", { id });
+        } else if (action === "alarm-dismiss") {
+          this._hass.callService("herold", "alarm_dismiss", { id });
         }
       }
     }
@@ -201,6 +213,7 @@
             this._scheduledItems(ids).length + this._watchItems(ids).length
           )}`,
         ],
+        ["alarms", `⏰ Wecker${this._badge(this._alarmItems(ids).length)}`],
         ["history", "📜 Logbuch"],
       ]
         .map(
@@ -213,6 +226,7 @@
       let body;
       if (this._tab === "inbox") body = this._renderInbox(ids);
       else if (this._tab === "scheduled") body = this._renderScheduled(ids);
+      else if (this._tab === "alarms") body = this._renderAlarms(ids);
       else body = this._renderHistory(ids);
 
       this.shadowRoot.innerHTML = `
@@ -290,6 +304,43 @@
       if (!ids.watches) return [];
       const stateObj = this._hass.states[ids.watches];
       return (stateObj && stateObj.attributes.watches) || [];
+    }
+
+    _alarmItems(ids) {
+      if (!ids.alarms) return [];
+      const stateObj = this._hass.states[ids.alarms];
+      return (stateObj && stateObj.attributes.alarms) || [];
+    }
+
+    _renderAlarms(ids) {
+      const alarms = this._alarmItems(ids);
+      if (!alarms.length) {
+        return '<div class="empty">Keine Wecker gestellt.</div>';
+      }
+      return alarms
+        .map((alarm) => {
+          const ringing = alarm.status === "ringing";
+          const buttons = ringing
+            ? `<button class="btn" data-action="alarm-snooze"
+                 data-id="${esc(alarm.id)}">😴</button>
+               <button class="btn primary" data-action="alarm-dismiss"
+                 data-id="${esc(alarm.id)}">✓</button>`
+            : `<button class="btn danger" data-action="alarm-cancel"
+                 data-id="${esc(alarm.id)}">✕</button>`;
+          const next = alarm.next_trigger
+            ? ` · ${fmtRelative(alarm.next_trigger)}`
+            : "";
+          return `
+            <div class="row">
+              <span class="icon">${ringing ? "🔔" : "⏰"}</span>
+              <div class="main">
+                <div class="text">${esc(alarm.label || alarm.time)}</div>
+                <div class="sub">${esc(alarm.schedule)}${next}</div>
+              </div>
+              ${buttons}
+            </div>`;
+        })
+        .join("");
     }
 
     _renderInbox(ids) {

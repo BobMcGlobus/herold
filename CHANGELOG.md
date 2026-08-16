@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.0.0 — Wecker
+
+- Weckerverwaltung: einmalig oder auf Wochentagen wiederkehrend, mit
+  Bezeichnung und eigener Weckdurchsage; persistent über Neustarts
+- Sanftes Wecken: Lautstärke rampt über die Durchgänge hoch (35 % → 100 %
+  der „laut"-Stufe), Alarm-Lichter dimmen über 30 s hoch statt rot zu
+  blinken; Weckrufe ignorieren DND, Ruhezeiten und Rate-Limiting
+- Klingelt alle 45 s weiter bis Dismiss, gibt nach 5 Durchgängen auf
+- Services `herold.alarm_set` / `_cancel` / `_snooze` (Standard 9 min) /
+  `_dismiss`; Snooze und Dismiss ohne ID betreffen den klingelnden Wecker
+- Automation-Hooks: `sensor.*_naechster_wecker` (Timestamp),
+  `binary_sensor.*_wecker_klingelt`, Events `herold_alarm_set`,
+  `herold_alarm_triggered`, `herold_alarm_snoozed`, `herold_alarm_dismissed`
+- LLM-Tools `herold_set_alarm`, `herold_list_alarms`, `herold_cancel_alarm`
+- Karte: neuer Tab „Wecker" mit Schlummern/Beenden/Löschen
+
 ## 0.9.0 — Lautstärke & Ruhezeiten
 
 - Drei optionale Lautstärkestufen pro Raum (leise / normal / laut) in

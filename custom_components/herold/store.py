@@ -27,6 +27,7 @@ class HeroldStore:
         self.queries: dict[str, dict[str, Any]] = {}
         self.schedules: dict[str, dict[str, Any]] = {}
         self.watches: dict[str, dict[str, Any]] = {}
+        self.alarms: dict[str, dict[str, Any]] = {}
         self.todo_items: list[dict[str, Any]] = []
         self.dnd_session: dict[str, Any] | None = None
         self.history: list[dict[str, Any]] = []
@@ -40,6 +41,7 @@ class HeroldStore:
         self.queries = data.get("queries") or {}
         self.schedules = data.get("schedules") or {}
         self.watches = data.get("watches") or {}
+        self.alarms = data.get("alarms") or {}
         self.todo_items = data.get("todo_items") or []
         self.dnd_session = data.get("dnd_session")
         self.history = data.get("history") or []
@@ -68,6 +70,7 @@ class HeroldStore:
             "queries": self.queries,
             "schedules": self.schedules,
             "watches": self.watches,
+            "alarms": self.alarms,
             "todo_items": self.todo_items,
             "dnd_session": self.dnd_session,
             "history": self.history,

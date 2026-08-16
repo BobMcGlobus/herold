@@ -266,6 +266,65 @@ watch:
         text:
           multiline: true
 
+alarm_set:
+  fields:
+    time:
+      required: true
+      example: "07:00"
+      selector:
+        time:
+    days:
+      example: "mon, tue, wed, thu, fri"
+      selector:
+        select:
+          multiple: true
+          options:
+            - mon
+            - tue
+            - wed
+            - thu
+            - fri
+            - sat
+            - sun
+    label:
+      example: Arbeit
+      selector:
+        text:
+    message:
+      example: "Guten Morgen! Zeit aufzustehen."
+      selector:
+        text:
+          multiline: true
+
+alarm_cancel:
+  fields:
+    id:
+      required: true
+      example: a1b2c3d4
+      selector:
+        text:
+
+alarm_snooze:
+  fields:
+    id:
+      example: a1b2c3d4
+      selector:
+        text:
+    minutes:
+      example: 9
+      selector:
+        number:
+          min: 1
+          max: 120
+          unit_of_measurement: min
+
+alarm_dismiss:
+  fields:
+    id:
+      example: a1b2c3d4
+      selector:
+        text:
+
 dnd_on:
   fields:
     until:

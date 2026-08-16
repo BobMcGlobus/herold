@@ -212,6 +212,42 @@ ATTR_VOLUME: Final = "volume"
 VOLUME_RESTORE_TIMEOUT_SECONDS: Final = 60
 VOLUME_RESTORE_POLL_SECONDS: Final = 0.5
 
+# --- Alarm clock ---------------------------------------------------------
+CONF_ALARM_SNOOZE_MINUTES: Final = "alarm_snooze_minutes"
+CONF_ALARM_MAX_RINGS: Final = "alarm_max_rings"
+CONF_ALARM_LIGHT_ENTITIES: Final = "alarm_light_entities"
+
+DEFAULT_ALARM_SNOOZE_MINUTES: Final = 9
+DEFAULT_ALARM_MAX_RINGS: Final = 5
+ALARM_RING_INTERVAL_SECONDS: Final = 45
+
+# Volume ramp across repeated rings (fractions of the loud level)
+ALARM_RAMP: Final = (0.35, 0.55, 0.75, 0.9, 1.0)
+
+ALARM_STATUS_ARMED: Final = "armed"
+ALARM_STATUS_RINGING: Final = "ringing"
+ALARM_STATUS_SNOOZED: Final = "snoozed"
+ALARM_STATUS_DONE: Final = "done"
+
+WEEKDAYS: Final = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+SERVICE_ALARM_SET: Final = "alarm_set"
+SERVICE_ALARM_CANCEL: Final = "alarm_cancel"
+SERVICE_ALARM_SNOOZE: Final = "alarm_snooze"
+SERVICE_ALARM_DISMISS: Final = "alarm_dismiss"
+
+EVENT_ALARM_SET: Final = "herold_alarm_set"
+EVENT_ALARM_TRIGGERED: Final = "herold_alarm_triggered"
+EVENT_ALARM_SNOOZED: Final = "herold_alarm_snoozed"
+EVENT_ALARM_DISMISSED: Final = "herold_alarm_dismissed"
+
+ATTR_TIME: Final = "time"
+ATTR_DAYS: Final = "days"
+ATTR_LABEL: Final = "label"
+ATTR_MINUTES: Final = "minutes"
+
+DEFAULT_ALARM_MESSAGE: Final = "Guten Morgen! Zeit aufzustehen."
+
 TEST_NOTIFICATION_MESSAGE: Final = "Herold Test-Nachricht — funktioniert"
 
 
@@ -253,3 +289,8 @@ def signal_internal(entry_id: str) -> str:
 def signal_watch(entry_id: str) -> str:
     """Dispatcher signal fired when the watch list changed."""
     return f"{DOMAIN}_{entry_id}_watch"
+
+
+def signal_alarm(entry_id: str) -> str:
+    """Dispatcher signal fired when an alarm changed state."""
+    return f"{DOMAIN}_{entry_id}_alarm"

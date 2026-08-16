@@ -285,6 +285,9 @@
       },
       "watch_count": {
         "name": "Aktive Beobachtungen"
+      },
+      "next_alarm": {
+        "name": "Nächster Wecker"
       }
     },
     "todo": {
@@ -304,6 +307,9 @@
       },
       "escalation_active": {
         "name": "Eskalation aktiv"
+      },
+      "alarm_ringing": {
+        "name": "Wecker klingelt"
       }
     },
     "button": {
@@ -564,6 +570,62 @@
     "dnd_off": {
       "name": "DND aus",
       "description": "Deaktiviert Nicht-stören und beendet eine laufende DND-Session."
+    },
+    "alarm_set": {
+      "name": "Wecker stellen",
+      "description": "Legt einen Wecker an. Ohne Wochentage klingelt er einmalig zur nächsten passenden Uhrzeit.",
+      "fields": {
+        "time": {
+          "name": "Uhrzeit",
+          "description": "Weckzeit im 24-Stunden-Format, z.B. 07:00."
+        },
+        "days": {
+          "name": "Wochentage",
+          "description": "Wochentage für einen wiederkehrenden Wecker; leer = einmalig."
+        },
+        "label": {
+          "name": "Bezeichnung",
+          "description": "Optionaler Name, z.B. 'Arbeit'."
+        },
+        "message": {
+          "name": "Nachricht",
+          "description": "Was Herold beim Klingeln sagt."
+        }
+      }
+    },
+    "alarm_cancel": {
+      "name": "Wecker löschen",
+      "description": "Entfernt einen Wecker vollständig.",
+      "fields": {
+        "id": {
+          "name": "Wecker-ID",
+          "description": "Die ID des Weckers."
+        }
+      }
+    },
+    "alarm_snooze": {
+      "name": "Wecker schlummern",
+      "description": "Verschiebt den klingelnden Wecker.",
+      "fields": {
+        "id": {
+          "name": "Wecker-ID",
+          "description": "Standard ist der aktuell klingelnde Wecker."
+        },
+        "minutes": {
+          "name": "Minuten",
+          "description": "Schlummerdauer; Standard ist der konfigurierte Wert."
+        }
+      }
+    },
+    "alarm_dismiss": {
+      "name": "Wecker ausschalten",
+      "description": "Beendet den klingelnden Wecker und stellt die nächste Wiederholung scharf.",
+      "fields": {
+        "id": {
+          "name": "Wecker-ID",
+          "description": "Standard ist der aktuell klingelnde Wecker."
+        }
+      }
     }
   }
 }

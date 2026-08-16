@@ -10,6 +10,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import (
     DOMAIN,
+    signal_alarm,
     signal_delivery,
     signal_history,
     signal_internal,
@@ -46,6 +47,7 @@ async def async_setup_entry(
             HeroldHistorySensor(coordinator),
             HeroldLastInternalSensor(coordinator),
             HeroldWatchCountSensor(coordinator),
+            HeroldNextAlarmSensor(coordinator),
         ]
     )
 
@@ -325,4 +327,49 @@ class HeroldWatchCountSensor(HeroldSignalSensor):
                 }
                 for watch in self.coordinator.watcher.active
             ]
+        }
+
+
+class HeroldNextAlarmSensor(HeroldSignalSensor):
+    """Timestamp of the next alarm — the trigger surface for automations."""
+
+    _attr_translation_key = "next_alarm"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _signal = staticmethod(signal_alarm)
+
+    def __init__(self, coordinator: HeroldCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_next_alarm"
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return when the next alarm rings."""
+        alarm = self.coordinator.alarms.next_alarm
+        return alarm.next_trigger if alarm else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose all alarms plus details of the next one."""
+        manager = self.coordinator.alarms
+        upcoming = manager.next_alarm
+        return {
+            "id": upcoming.id if upcoming else None,
+            "label": upcoming.label if upcoming else None,
+            "schedule": upcoming.describe() if upcoming else None,
+            "alarms": [
+                {
+                    "id": alarm.id,
+                    "time": alarm.time,
+                    "days": alarm.days,
+                    "label": alarm.label,
+                    "status": alarm.status,
+                    "schedule": alarm.describe(),
+                    "next_trigger": (
+                        alarm.next_trigger.isoformat()
+                        if alarm.next_trigger
+                        else None
+                    ),
+                }
+                for alarm in manager.active
+            ],
         }
