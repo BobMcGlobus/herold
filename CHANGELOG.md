@@ -1,122 +1,129 @@
 # Changelog
 
-## 1.0.0 — Wecker
+Language note: this file, the code, comments and commit messages are
+English. User-facing surfaces (config flow, entity names, README, test
+plans) are German — see `translations/`. Entity ids below use the English
+names; on a German instance they are the translated ones, e.g.
+`sensor.herold_naechster_wecker` for `sensor.*_next_alarm`.
 
-- Weckerverwaltung: einmalig oder auf Wochentagen wiederkehrend, mit
-  Bezeichnung und eigener Weckdurchsage; persistent über Neustarts
-- Sanftes Wecken: Lautstärke rampt über die Durchgänge hoch (35 % → 100 %
-  der „laut"-Stufe), Alarm-Lichter dimmen über 30 s hoch statt rot zu
-  blinken; Weckrufe ignorieren DND, Ruhezeiten und Rate-Limiting
-- Klingelt alle 45 s weiter bis Dismiss, gibt nach 5 Durchgängen auf
-- Services `herold.alarm_set` / `_cancel` / `_snooze` (Standard 9 min) /
-  `_dismiss`; Snooze und Dismiss ohne ID betreffen den klingelnden Wecker
-- Automation-Hooks: `sensor.*_naechster_wecker` (Timestamp),
-  `binary_sensor.*_wecker_klingelt`, Events `herold_alarm_set`,
+## 1.0.0 — Alarm clock
+
+- Alarm management: one-shot or repeating on weekdays, with label and a
+  custom wake message; persisted across restarts
+- Gentle wake: the volume ramps up across rings (35 % → 100 % of the room's
+  "loud" level) and alarm lights fade up over 30 s instead of the P4 red
+  strobe; alarm rings deliberately bypass DND, quiet hours and rate limiting
+- Rings every 45 s until dismissed, gives up after 5 rings
+- Services `herold.alarm_set` / `_cancel` / `_snooze` (default 9 min) /
+  `_dismiss`; snooze and dismiss without an id act on the ringing alarm
+- Automation hooks: `sensor.*_next_alarm` (timestamp),
+  `binary_sensor.*_alarm_ringing`, events `herold_alarm_set`,
   `herold_alarm_triggered`, `herold_alarm_snoozed`, `herold_alarm_dismissed`
-- LLM-Tools `herold_set_alarm`, `herold_list_alarms`, `herold_cancel_alarm`
-- Karte: neuer Tab „Wecker" mit Schlummern/Beenden/Löschen
+- LLM tools `herold_set_alarm`, `herold_list_alarms`, `herold_cancel_alarm`
+- Card: new "Wecker" tab with snooze / dismiss / delete
 
-## 0.9.0 — Lautstärke & Ruhezeiten
+## 0.9.0 — Volume levels and quiet hours
 
-- Drei optionale Lautstärkestufen pro Raum (leise / normal / laut) in
-  Prozent; nicht gesetzte Stufen lassen die Lautstärke unangetastet
-- Nach der Durchsage wird die vorherige Lautstärke wiederhergestellt —
-  erst wenn der Player wirklich fertig ist (Polling statt fixem Delay),
-  und bei überlappenden Durchsagen nur einmal am Ende
-- Player ohne `volume_set` werden übersprungen statt Fehler zu werfen
-- **Ruhezeiten** (Optionen → Nicht stören): im Zeitfenster sprechen P2/P3
-  auf der leisen Stufe, P4 bleibt immer laut
+- Three optional volume levels per room (quiet / normal / loud) in percent;
+  levels left blank leave the volume untouched
+- The previous volume is restored after the announcement — but only once the
+  player actually finished (polled instead of a fixed delay), and only once
+  at the end when announcements overlap
+- Players without `volume_set` support are skipped instead of erroring
+- **Quiet hours** (options → DND): inside the window P2/P3 speak at the quiet
+  level, P4 always stays loud
 
-## 0.8.0 — Ereignis-Trigger
+## 0.8.0 — State-triggered reminders
 
-- Neuer Service `herold.watch`: Erinnerungen, die auf eine
-  Zustandsänderung warten statt auf eine Uhrzeit („wenn ich das nächste Mal
-  die Haustür öffne") — inklusive numerischer Schwellen (`above`/`below`),
-  die nur beim Überschreiten auslösen
-- Einmalig per Default, mit TTL (Standard 72 h) gegen vergessene Trigger,
-  persistent über Neustarts
-- Neues LLM-Tool `herold_remind_when`; gibt den aufgelösten Klarnamen der
-  Entity zurück, damit eine falsche Zuordnung sofort auffällt
-- `sensor.*_aktive_beobachtungen`, Events `herold_watch_armed` und
-  `herold_watch_triggered` für eigene Automationen
-- `herold.cancel` und `herold_cancel` kümmern sich auch um Beobachtungen
-- Karte: Tab „Geplant" trennt jetzt „Nach Zeit" und „Nach Ereignis"
+- New service `herold.watch`: reminders that wait for a state change instead
+  of a point in time ("the next time I open the front door"), including
+  numeric thresholds (`above`/`below`) that only fire on the crossing
+- One-shot by default, with a TTL (default 72 h) against forgotten triggers,
+  persisted across restarts
+- New LLM tool `herold_remind_when`; returns the resolved friendly name of
+  the entity so a wrong match is obvious immediately
+- `sensor.*_watch_count`, events `herold_watch_armed` and
+  `herold_watch_triggered` for custom automations
+- `herold.cancel` and `herold_cancel` now also cancel watches
+- Card: the scheduled tab separates "by time" and "by event"
 
-## 0.7.0 — Verlässliche LLM-Rückmeldung
+## 0.7.0 — Reliable LLM feedback
 
-- Der Internal-Channel wertet die Antwort von `conversation.process` jetzt
-  aus (`return_response`): Agent-Fehler und fehlgeschlagene Geräte-Ziele
-  werden erkannt statt verschluckt
-- Optionale **Selbstkontrolle**: nach einer P0-Anweisung prüft der Agent in
-  genau einem weiteren Zug, ob wirklich passiert ist was sollte, und bessert
-  einmalig nach (`ok` / `corrected` / `failed` / `unverified`) — Standard an,
-  abschaltbar in den Optionen
-- `sensor.*_letzte_interne_anweisung` mit Status, Agent-Antwort und
-  Fehlerdetail; Einträge im Karten-Logbuch
-- LLM-Tools liefern einen **sprechbaren Bestätigungssatz** (`confirmation`),
-  den der Agent laut Tool-Description vorlesen muss — man hört jetzt, ob
-  etwas wirklich gespeichert wurde
-- Neues LLM-Tool `herold_cancel`: „vergiss die Erinnerung" funktioniert
-- `task_context` bei `herold.schedule` / `herold.remind_self` und im
-  Remind-Tool: der Grund wird gespeichert und beim Auslösen mitgegeben
-- Events `herold_internal_triggered` (jetzt mit Agent-Antwort) und
+- The internal channel now inspects the `conversation.process` response
+  (`return_response`): agent errors and failed device targets are detected
+  instead of swallowed
+- Optional **self-check**: after a P0 instruction the agent verifies in
+  exactly one further turn whether it really happened and corrects once
+  (`ok` / `corrected` / `failed` / `unverified`) — on by default, can be
+  disabled in the options
+- `sensor.*_last_internal` with status, agent reply and failure detail;
+  entries in the card's logbook
+- LLM tools return a **speakable confirmation sentence** (`confirmation`)
+  that the tool description requires the agent to read out — you can now
+  hear whether something was really stored
+- New LLM tool `herold_cancel`: "forget that reminder" works
+- `task_context` on `herold.schedule` / `herold.remind_self` and in the
+  remind tool: the reason is stored and handed over when it fires
+- Events `herold_internal_triggered` (now with the agent reply) and
   `herold_internal_verified`
 
-## 0.6.0 — Dashboard-Karte & Verlauf
+## 0.6.0 — Dashboard card and history
 
-- Lovelace-Karte `custom:herold-card` (automatisch geladen, keine
-  Ressourcen-Config nötig): Inbox mit Antwort-Buttons und Todo-Abhaken,
-  Tab „Geplant" mit Countdown + Cancel, Logbuch-Tab
-- `sensor.*_verlauf`: Ringpuffer der letzten 50 Ereignisse (zugestellt,
-  verworfen mit Grund, Rate-Limit, Frage/Antwort, Eskalation, geplant),
-  persistent über Neustarts
-- Pending-Sensor liefert jetzt auch die `choices` je Frage
-- `TESTING.md`: konsolidierter Testplan mit Copy-Paste-YAML
+- Lovelace card `custom:herold-card` (auto-loaded, no resource config
+  needed): inbox with answer buttons and todo check-off, scheduled tab with
+  countdown and cancel, logbook tab
+- `sensor.*_history`: ring buffer of the last 50 events (delivered, dropped
+  with reason, rate limited, query/answer, escalation, scheduled), persisted
+  across restarts
+- The pending sensor now also exposes the `choices` per query
+- `TESTING.md`: consolidated test plan with copy-paste YAML
 
-## 0.5.0 — Phase 5: Tests & Polish
+## 0.5.0 — Phase 5: tests and polish
 
-- pytest-Suite (64 Tests): Dispatcher-Matrix, Room-Router-Konfliktauflösung,
-  Legacy-Event-Semantik, Model-Roundtrips, `parse_when`-Grammatik,
-  Rate-Limiter, Templates, Antwort-Normalisierung
-- Test-Workflow in CI (`test.yml`, Python 3.13)
-- Fix: Voice-Channel meldet „kein Raum / kein Output" jetzt als Fehler im
-  `errors`-Attribut statt still als Zustellung zu zählen
+- pytest suite (64 tests): dispatcher matrix, room router conflict
+  resolution, legacy event semantics, model roundtrips, `parse_when`
+  grammar, rate limiter, templates, answer normalization
+- Test workflow in CI (`test.yml`, Python 3.13)
+- Fix: the voice channel reports "no room / no output" as an error in the
+  `errors` attribute instead of silently counting as a delivery
 
-## 0.4.0 — Phase 4: Escalation, Rate-Limiting, DND-Sessions, Templates
+## 0.4.0 — Phase 4: escalation, rate limiting, DND sessions, templates
 
-- Escalation-Chains für unbeantwortete Fragen (`escalation`-Feld,
-  `herold_escalated`-Event, `binary_sensor.*_eskalation_aktiv`)
-- `voice_timeout_seconds`: ohne Voice-Antwort gehen die Buttons nach Telegram
-- Rate-Limiter: P3 60 s Dedup pro Tag, P2 max. 3/5 min mit Aggregation,
-  `ignore_rate_limit`-Bypass
-- DND-Sessions: `herold.dnd_on` (`until`, `until_home`) / `herold.dnd_off`,
-  persistent über Neustarts
-- Benachrichtigungs-Vorlagen mit Jinja-Platzhaltern (Options-Editor)
-- Drop-/Limit-Gründe im `reason`-Attribut der letzten Zustellung
-- `sensor.*_naechste_zustellung` (Timestamp)
+- Escalation chains for unanswered queries (`escalation` field,
+  `herold_escalated` event, `binary_sensor.*_escalation_active`)
+- `voice_timeout_seconds`: without a voice answer the buttons go to Telegram
+- Rate limiter: P3 60 s dedup per tag, P2 max 3 per 5 min with aggregation,
+  `ignore_rate_limit` bypass
+- DND sessions: `herold.dnd_on` (`until`, `until_home`) / `herold.dnd_off`,
+  persisted across restarts
+- Notification templates with Jinja placeholders (options editor)
+- Drop and rate-limit reasons in the `reason` attribute of the last delivery
+- `sensor.*_next_schedule` (timestamp)
 
-## 0.3.0 — Phase 3: P0, Scheduler, LLM-Tools, Todo
+## 0.3.0 — Phase 3: P0, scheduler, LLM tools, todo
 
-- Internal Channel: P0-Instruktionen via `conversation.process`
-  (`[HEROLD_INTERNAL]`, Fallback-Agent, 20/h Anti-Runaway)
-- `herold.schedule` + `herold.remind_self` mit Persistenz und 5-min-Grace
-- Native LLM-API „Herold": `list_pending`, `acknowledge`, `answer_query`,
+- Internal channel: P0 instructions via `conversation.process`
+  (`[HEROLD_INTERNAL]`, fallback agent, 20/h anti-runaway)
+- `herold.schedule` + `herold.remind_self` with persistence and a 5 min grace
+  period for deliveries missed while Home Assistant was down
+- Native LLM API "Herold": `list_pending`, `acknowledge`, `answer_query`,
   `remind_self`
-- Todo-Inbox für P1-Benachrichtigungen (`todo.*_eingang`)
+- Todo inbox for P1 notifications (`todo.*_inbox`)
 
-## 0.2.0 — Phase 2: Query, Telegram, Room-Router
+## 0.2.0 — Phase 2: query, Telegram, room router
 
-- `herold.query` (yesno/open/choice) mit Timeout, `default_answer` und
-  Persistenz; `herold.acknowledge` / `herold.cancel`
-- Telegram-Channel mit legacy-kompatiblen Inline-Buttons (`/AI_YES`-Format)
-- Legacy-Events `AI_YES`/`AI_NO` bzw. `<custom>_YES`/`_NO` plus
-  strukturiertes `herold_answered`
-- Multi-Occupancy-Konfliktauflösung + Last-Known-Room-Fallback (15 min)
-- `flash_entities` (mehrere Lichter/Szenen) mit Config-Migration v1→v2
+- `herold.query` (yesno/open/choice) with timeout, `default_answer` and
+  persistence; `herold.acknowledge` / `herold.cancel`
+- Telegram channel with legacy-compatible inline buttons (`/AI_YES` format)
+- Legacy events `AI_YES`/`AI_NO` resp. `<custom>_YES`/`_NO` plus the
+  structured `herold_answered`
+- Multi-occupancy conflict resolution and last-known-room fallback (15 min)
+- `flash_entities` (multiple lights/scenes) with config migration v1 → v2
 
 ## 0.1.0 — Phase 1: MVP
 
-- `herold.send` mit Prioritätsmodell P0–P4 (portiert vom Original-Script)
-- Raumbewusste Voice-Delivery, Media-Player-Only-Räume, TTS-Fallback-Kette
-- Push-Channel (critical für P4), DND-Schalter + externe DND-Entität
-- Config Flow mit Multi-Occupancy-Räumen, Options Flow
+- `herold.send` with the P0–P4 priority model (ported from the original
+  script)
+- Room-aware voice delivery, media-player-only rooms, TTS fallback chain
+- Push channel (critical for P4), DND switch plus external DND entity
+- Config flow with multi-occupancy rooms, options flow
