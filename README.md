@@ -17,8 +17,8 @@ maintainable, testable integration with UI configuration.
 
 > **A note on languages.** Code, comments, commit messages, the changelog and
 > every prompt Herold sends to an LLM are English. The user-facing surfaces —
-> config flow, entity names, this README's German twin, the test plan — are
-> German, because that is what the household speaks. See `translations/`.
+> config flow, entity names and this README's German twin — are German,
+> because that is what the household speaks. See `translations/`.
 
 ## Requirements
 
@@ -90,8 +90,7 @@ templates can be added, edited and removed without re-running setup.
 | Alarm clock with ramp-up, snooze and automation hooks | ✅ 1.0.0 |
 | Offline queue, multi-user | 🔜 backlog |
 
-The full roadmap lives in [HEROLD_PLAN.md](HEROLD_PLAN.md), the release
-history in [CHANGELOG.md](CHANGELOG.md).
+The release history lives in [CHANGELOG.md](CHANGELOG.md).
 
 ## Service: `herold.send`
 
@@ -101,7 +100,7 @@ data:
   message: "Die Waschmaschine ist fertig"
   priority: 2          # 0 internal · 1 todo · 2 normal · 3 important · 4 alarm
   # title: "Optional push title"
-  # target_player: assist_satellite.wohnzimmer_sattelite_assist_satellit
+  # target_player: assist_satellite.living_room
   # tag: waschmaschine
   # ttl_minutes: 30
   # callback_event: AI_CONFIRM
@@ -143,7 +142,7 @@ service: herold.remind_self     # P0 convenience for the assistant
 data:
   when: "+30m"
   instruction: "Frage den User via herold.query: Wie ist der Kuchen geworden?"
-  task_context: "Jonas backt gerade einen Kuchen."
+  task_context: "Es backt gerade ein Kuchen."
 ```
 
 Scheduled notifications survive restarts; deliveries missed while Home
@@ -265,7 +264,7 @@ one-shot automations the assistant creates for itself:
 ```yaml
 service: herold.watch
 data:
-  entity_id: binary_sensor.haustuer_kontakt
+  entity_id: binary_sensor.front_door
   to_state: "on"
   message: Denk an das Paket für den Postboten!
   priority: 3
@@ -278,7 +277,7 @@ not continuously):
 ```yaml
 service: herold.watch
 data:
-  entity_id: sensor.aussentemperatur
+  entity_id: sensor.outdoor_temperature
   below: 5
   message: Es wird frostig — denk an die Pflanzen auf dem Balkon.
 ```
@@ -369,7 +368,7 @@ data:
 Herold is designed as a drop-in successor of the omnichannel communicator
 script:
 
-- **`input_boolean.notification_blocker`** can be configured as the
+- **`input_boolean.do_not_disturb`** can be configured as the
   *external DND entity* in the DND step — existing automations (goodnight,
   sports popup) keep working unchanged.
 - **Callback events stay bit-exact compatible:** `callback_event: AI_CONFIRM`
@@ -381,7 +380,7 @@ script:
   **not** call `answer_callback_query` — your existing handler automation
   still does that.
 - **Open questions (`mode: open`)** still mirror the question into the
-  configured `input_text` helper (e.g. `input_text.ai_pending_question`), so
+  configured `input_text` helper (e.g. `input_text.pending_question`), so
   the existing Telegram chat automation keeps its context.
 - **Suggested rollout:** install the integration alongside the script,
   compare behaviour, migrate automations to `herold.*` step by step, and
@@ -398,11 +397,6 @@ Run the test suite:
 ```bash
 pip install -r requirements_test.txt && pytest tests/
 ```
-
-Manual test cases: **[TESTING.md](TESTING.md)** (consolidated, with
-copy-paste YAML) · archive: [Phase 1](PHASE_1_TESTPLAN.md) ·
-[Phase 2](PHASE_2_TESTPLAN.md) · [Phase 3](PHASE_3_TESTPLAN.md) ·
-[Phase 4](PHASE_4_TESTPLAN.md)
 
 ## License
 

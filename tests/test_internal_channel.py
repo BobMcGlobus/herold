@@ -75,9 +75,9 @@ def test_prompt_includes_context_when_given() -> None:
     plain = InternalChannel._build_prompt("Licht aus", None)
     assert plain == f"{HEROLD_INTERNAL_PREFIX} Licht aus"
 
-    with_context = InternalChannel._build_prompt("Licht aus", "Jonas geht ins Bett")
+    with_context = InternalChannel._build_prompt("Licht aus", "Der User geht schlafen")
     assert with_context.startswith(HEROLD_INTERNAL_PREFIX)
     # Scaffolding in English, user content untouched
     assert "Background from the earlier conversation" in with_context
-    assert "Jonas geht ins Bett" in with_context
+    assert "Der User geht schlafen" in with_context
     assert "Licht aus" in with_context

@@ -67,12 +67,12 @@ def test_last_known_room_expires_after_ttl() -> None:
 
 def test_require_sat_filters_media_only_rooms() -> None:
     media_room = Room(
-        name="bad",
-        occupancy_entities=["binary_sensor.bad"],
-        media_player_entity="media_player.sonos_roam",
+        name="bathroom",
+        occupancy_entities=["binary_sensor.bathroom"],
+        media_player_entity="media_player.portable_speaker",
     )
     coordinator = make_coordinator(
-        on_entities={"binary_sensor.bad"}, rooms=[media_room]
+        on_entities={"binary_sensor.bathroom"}, rooms=[media_room]
     )
     assert select_room(coordinator) is not None
     assert select_room(coordinator, require_sat=True) is None

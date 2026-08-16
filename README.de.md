@@ -8,7 +8,7 @@
 
 Herold ist der Nachfolger des Scripts `System: Universal Omnichannel Communicator (Priority Edition)` — als wartbare, testbare Integration mit UI-Konfiguration.
 
-> **Zur Sprache:** Code, Kommentare, Commits, Changelog und alle Prompts, die Herold ans LLM schickt, sind Englisch. Deutsch sind nur die Oberflächen für den Haushalt — Config Flow, Entity-Namen, diese Übersetzung und der Testplan.
+> **Zur Sprache:** Code, Kommentare, Commits, Changelog und alle Prompts, die Herold ans LLM schickt, sind Englisch. Deutsch sind nur die Oberflächen für den Haushalt — Config Flow, Entity-Namen und diese Übersetzung.
 
 ## Voraussetzungen
 
@@ -46,38 +46,38 @@ Alle Sektionen sind später über die Integrations-Optionen editierbar; Räume u
 
 | Feature | Status |
 |---|---|
-| `herold.send` Service (P0–P4) | ✅ Phase 1 |
-| Raumbewusste Voice-Delivery (Occupancy → Satellit) | ✅ Phase 1 |
-| Multi-Occupancy-Sensoren pro Raum (ODER-verknüpft) | ✅ Phase 1 |
-| Media-Player-Only-Räume (`tts.speak` Fallback) | ✅ Phase 1 |
-| TTS-Kette: Primär → Offline-Fallback (z.B. ElevenLabs → Piper) | ✅ Phase 1 |
-| Mobile App Push (critical Sound für P4) | ✅ Phase 1 |
-| DND-Schalter + externe DND-Entität | ✅ Phase 1 |
-| `herold.query` — Fragen mit Antwort (yesno / open / choice) | ✅ Phase 2 |
-| Telegram-Channel mit Inline-Buttons (legacy-kompatibel) | ✅ Phase 2 |
-| Query-Persistenz über Neustarts, Timeout + default_answer | ✅ Phase 2 |
-| Multi-Occupancy-Konfliktauflösung (Gewicht + Aktualität) | ✅ Phase 2 |
-| Last-Known-Room-Fallback (TTL 15 min) | ✅ Phase 2 |
-| P4 Alarm-Blinken: mehrere Lichter und Szenen pro Raum | ✅ Phase 2 |
-| Pending-Sensoren (`pending_count`, `last_query`, `any_pending`) | ✅ Phase 2 |
-| `herold.schedule` + `herold.remind_self` (persistiert über Neustarts) | ✅ Phase 3 |
-| P0 Internal Channel (LLM-Self-Callback via `conversation.process`) | ✅ Phase 3 |
-| Native LLM-Tools (`list_pending`, `acknowledge`, `answer_query`, `remind_self`) | ✅ Phase 3 |
-| Todo-Inbox `todo.herold_eingang` für P1-Benachrichtigungen | ✅ Phase 3 |
-| Escalation-Chains für unbeantwortete Fragen | ✅ Phase 4 |
-| Voice-Timeout: Buttons gehen nach Telegram, wenn niemand antwortet | ✅ Phase 4 |
-| Rate-Limiting + P2-Aggregation (Anti-Spam) | ✅ Phase 4 |
-| DND-Sessions (`until`, `until_home`) | ✅ Phase 4 |
-| Benachrichtigungs-Vorlagen mit Jinja-Platzhaltern | ✅ Phase 4 |
-| pytest-Suite (Dispatcher, Router, Legacy-Kompat, Limiter, …) | ✅ Phase 5 |
-| Dashboard-Karte (Inbox / Geplant / Wecker / Logbuch) + Verlauf | ✅ v0.6.0 |
-| Antwort-Auswertung + Selbstkontrolle für LLM-Anweisungen | ✅ v0.7.0 |
-| Ereignis-Trigger (`herold.watch`, `herold_remind_when`) | ✅ v0.8.0 |
-| Lautstärkestufen pro Raum + Ruhezeiten | ✅ v0.9.0 |
-| Wecker mit Ramp-up, Snooze und Automation-Hooks | ✅ v1.0.0 |
+| `herold.send` Service (P0–P4) | ✅ 0.1.0 |
+| Raumbewusste Voice-Delivery (Occupancy → Satellit) | ✅ 0.1.0 |
+| Multi-Occupancy-Sensoren pro Raum (ODER-verknüpft) | ✅ 0.1.0 |
+| Media-Player-Only-Räume (`tts.speak` Fallback) | ✅ 0.1.0 |
+| TTS-Kette: Primär → Offline-Fallback (z.B. ElevenLabs → Piper) | ✅ 0.1.0 |
+| Mobile App Push (critical Sound für P4) | ✅ 0.1.0 |
+| DND-Schalter + externe DND-Entität | ✅ 0.1.0 |
+| `herold.query` — Fragen mit Antwort (yesno / open / choice) | ✅ 0.2.0 |
+| Telegram-Channel mit Inline-Buttons (legacy-kompatibel) | ✅ 0.2.0 |
+| Query-Persistenz über Neustarts, Timeout + default_answer | ✅ 0.2.0 |
+| Multi-Occupancy-Konfliktauflösung (Gewicht + Aktualität) | ✅ 0.2.0 |
+| Last-Known-Room-Fallback (TTL 15 min) | ✅ 0.2.0 |
+| P4 Alarm-Blinken: mehrere Lichter und Szenen pro Raum | ✅ 0.2.0 |
+| Pending-Sensoren (`pending_count`, `last_query`, `any_pending`) | ✅ 0.2.0 |
+| `herold.schedule` + `herold.remind_self` (persistiert über Neustarts) | ✅ 0.3.0 |
+| P0 Internal Channel (LLM-Self-Callback via `conversation.process`) | ✅ 0.3.0 |
+| Native LLM-Tools (`list_pending`, `acknowledge`, `answer_query`, `remind_self`) | ✅ 0.3.0 |
+| Todo-Inbox `todo.herold_eingang` für P1-Benachrichtigungen | ✅ 0.3.0 |
+| Escalation-Chains für unbeantwortete Fragen | ✅ 0.4.0 |
+| Voice-Timeout: Buttons gehen nach Telegram, wenn niemand antwortet | ✅ 0.4.0 |
+| Rate-Limiting + P2-Aggregation (Anti-Spam) | ✅ 0.4.0 |
+| DND-Sessions (`until`, `until_home`) | ✅ 0.4.0 |
+| Benachrichtigungs-Vorlagen mit Jinja-Platzhaltern | ✅ 0.4.0 |
+| pytest-Suite (Dispatcher, Router, Legacy-Kompat, Limiter, …) | ✅ 0.5.0 |
+| Dashboard-Karte (Inbox / Geplant / Wecker / Logbuch) + Verlauf | ✅ 0.6.0 |
+| Antwort-Auswertung + Selbstkontrolle für LLM-Anweisungen | ✅ 0.7.0 |
+| Ereignis-Trigger (`herold.watch`, `herold_remind_when`) | ✅ 0.8.0 |
+| Lautstärkestufen pro Raum + Ruhezeiten | ✅ 0.9.0 |
+| Wecker mit Ramp-up, Snooze und Automation-Hooks | ✅ 1.0.0 |
 | Offline-Queue, Multi-User | 🔜 Backlog |
 
-Die vollständige Roadmap steht in [HEROLD_PLAN.md](HEROLD_PLAN.md), die Release-Historie in [CHANGELOG.md](CHANGELOG.md).
+Die Release-Historie steht in [CHANGELOG.md](CHANGELOG.md).
 
 ## Service: `herold.send`
 
@@ -87,7 +87,7 @@ data:
   message: "Die Waschmaschine ist fertig"
   priority: 2          # 0 intern · 1 todo · 2 normal · 3 wichtig · 4 alarm
   # title: "Optionaler Push-Titel"
-  # target_player: assist_satellite.wohnzimmer_sattelite_assist_satellit
+  # target_player: assist_satellite.living_room
   # tag: waschmaschine
   # ttl_minutes: 30
   # callback_event: AI_CONFIRM
@@ -203,7 +203,7 @@ Neben zeitbasierten Erinnerungen kann Herold auf **Zustandsänderungen** warten 
 ```yaml
 service: herold.watch
 data:
-  entity_id: binary_sensor.haustuer_kontakt
+  entity_id: binary_sensor.front_door
   to_state: "on"
   message: Denk an das Paket für den Postboten!
   priority: 3
@@ -215,7 +215,7 @@ Auch numerisch (`above` / `below`, feuert nur beim Überschreiten, nicht dauerha
 ```yaml
 service: herold.watch
 data:
-  entity_id: sensor.aussentemperatur
+  entity_id: sensor.outdoor_temperature
   below: 5
   message: Es wird frostig — denk an die Pflanzen auf dem Balkon.
 ```
@@ -240,7 +240,7 @@ Vier Tabs:
 
 Die Entities werden automatisch erkannt; bei Bedarf per `todo_entity`, `pending_entity`, `scheduled_entity`, `history_entity`, `watches_entity` oder `alarms_entity` überschreibbar.
 
-## Phase-4-Features
+## Eskalation, Rate-Limiting, DND-Sessions, Vorlagen
 
 **Escalation** (bei `herold.query`): unbeantwortete Fragen werden nach Zeitplan mit höherer Priorität erneut zugestellt:
 
@@ -285,9 +285,9 @@ data:
 
 Herold ist als Drop-in-Nachfolger des Omnichannel-Communicator-Scripts konzipiert:
 
-- **`input_boolean.notification_blocker`** kann im DND-Schritt als *externe DND-Entität* eingetragen werden — bestehende Automationen (Goodnight, Sport-Popup) bleiben unverändert.
+- **`input_boolean.do_not_disturb`** kann im DND-Schritt als *externe DND-Entität* eingetragen werden — bestehende Automationen (Goodnight, Sport-Popup) bleiben unverändert.
 - **Callback-Events bleiben bit-exakt kompatibel:** `callback_event: AI_CONFIRM` (Default) erzeugt Telegram-Buttons mit den Callback-Daten `/AI_YES` / `/AI_NO` — **ohne** CONFIRM-Teil, exakt wie das Original-Script. Bestehende `telegram_callback`-Automationen laufen unverändert weiter; Herold feuert bei Antwort zusätzlich das HA-Event `AI_YES`/`AI_NO` (bzw. `<custom>_YES`/`_NO`) und `herold_answered`. Herold ruft bewusst **kein** `answer_callback_query` auf — das macht weiterhin deine bestehende Handler-Automation.
-- **Offene Fragen (`mode: open`)** spiegeln die Frage weiterhin in den konfigurierten `input_text`-Helper (z.B. `input_text.ai_pending_question`), damit die bestehende Telegram-Chat-Automation den Kontext behält.
+- **Offene Fragen (`mode: open`)** spiegeln die Frage weiterhin in den konfigurierten `input_text`-Helper (z.B. `input_text.pending_question`), damit die bestehende Telegram-Chat-Automation den Kontext behält.
 - **Empfohlener Rollout:** Integration parallel zum Script installieren, Verhalten vergleichen, Automationen schrittweise auf `herold.send` migrieren, Script erst nach zwei stabilen Wochen löschen.
 
 ## Entwicklung
@@ -301,8 +301,6 @@ Testsuite ausführen:
 ```bash
 pip install -r requirements_test.txt && pytest tests/
 ```
-
-Manuelle Testfälle: **[TESTING.md](TESTING.md)** (konsolidiert, mit Copy-Paste-YAML) · Archiv: [Phase 1](PHASE_1_TESTPLAN.md) · [Phase 2](PHASE_2_TESTPLAN.md) · [Phase 3](PHASE_3_TESTPLAN.md) · [Phase 4](PHASE_4_TESTPLAN.md)
 
 ## Lizenz
 

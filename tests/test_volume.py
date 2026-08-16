@@ -4,7 +4,7 @@ from homeassistant.components.media_player import MediaPlayerEntityFeature
 
 from custom_components.herold.volume import VolumeController
 
-PLAYER = "media_player.sonos_roam"
+PLAYER = "media_player.portable_speaker"
 FEATURES = int(MediaPlayerEntityFeature.VOLUME_SET)
 
 

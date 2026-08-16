@@ -42,10 +42,10 @@ def test_schedule_roundtrip() -> None:
 
 def test_room_roundtrip_and_legacy_light_entity() -> None:
     room = Room(
-        name="Arbeitszimmer",
+        name="Study",
         occupancy_entities=["binary_sensor.occ"],
-        sat_entity="assist_satellite.az",
-        flash_entities=["light.schreibtisch"],
+        sat_entity="assist_satellite.study",
+        flash_entities=["light.desk"],
     )
     assert Room.from_dict(room.to_dict()) == room
 
@@ -63,11 +63,11 @@ def test_room_roundtrip_and_legacy_light_entity() -> None:
 
 def test_room_occupancy_is_or_linked() -> None:
     room = Room(
-        name="Wohnzimmer+Küche",
-        occupancy_entities=["binary_sensor.fp2_a", "binary_sensor.fp2_b"],
-        sat_entity="assist_satellite.wz",
+        name="Living room and kitchen",
+        occupancy_entities=["binary_sensor.presence_a", "binary_sensor.presence_b"],
+        sat_entity="assist_satellite.living_room",
     )
-    hass_one_on = SimpleNamespace(states=FakeStates({"binary_sensor.fp2_b"}))
+    hass_one_on = SimpleNamespace(states=FakeStates({"binary_sensor.presence_b"}))
     hass_all_off = SimpleNamespace(states=FakeStates(set()))
     assert room.is_occupied(hass_one_on) is True
     assert room.is_occupied(hass_all_off) is False

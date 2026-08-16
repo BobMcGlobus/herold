@@ -1,8 +1,8 @@
 # Changelog
 
 Language note: this file, the code, comments and commit messages are
-English. User-facing surfaces (config flow, entity names, README, test
-plans) are German — see `translations/`. Entity ids below use the English
+English. User-facing surfaces (config flow, entity names, the German
+README) are German — see `translations/`. Entity ids below use the English
 names; on a German instance they are the translated ones, e.g.
 `sensor.herold_naechster_wecker` for `sensor.*_next_alarm`.
 
@@ -76,7 +76,6 @@ names; on a German instance they are the translated ones, e.g.
   with reason, rate limited, query/answer, escalation, scheduled), persisted
   across restarts
 - The pending sensor now also exposes the `choices` per query
-- `TESTING.md`: consolidated test plan with copy-paste YAML
 
 ## 0.5.0 — Phase 5: tests and polish
 

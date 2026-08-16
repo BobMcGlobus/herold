@@ -71,5 +71,5 @@ def test_ramp_grows_and_clamps() -> None:
 
 
 def test_roundtrip() -> None:
-    alarm = Alarm(time="07:15", days=["mon", "fri"], label="Arbeit")
+    alarm = Alarm(time="07:15", days=["mon", "fri"], label="Work")
     assert Alarm.from_dict(alarm.to_dict()) == alarm

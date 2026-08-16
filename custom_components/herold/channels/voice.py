@@ -117,7 +117,7 @@ class VoiceChannel(BaseChannel):
                         blocking=True,
                     )
             elif target.media_player_entity:
-                # Media-player-only room (e.g. bathroom with a Sonos Roam)
+                # Media-player-only room (a speaker without a satellite)
                 await self._speak(
                     coordinator, target.media_player_entity, text
                 )

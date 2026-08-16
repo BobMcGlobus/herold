@@ -20,14 +20,14 @@ from custom_components.herold.models import Notification, Query, Room
 from .common import ctx_for, make_coordinator
 
 SAT_ROOM = Room(
-    name="Arbeitszimmer",
-    occupancy_entities=["binary_sensor.az"],
-    sat_entity="assist_satellite.az",
+    name="Study",
+    occupancy_entities=["binary_sensor.study"],
+    sat_entity="assist_satellite.study",
 )
 MEDIA_ROOM = Room(
-    name="Badezimmer",
-    occupancy_entities=["binary_sensor.bad"],
-    media_player_entity="media_player.sonos_roam",
+    name="Bathroom",
+    occupancy_entities=["binary_sensor.bathroom"],
+    media_player_entity="media_player.portable_speaker",
 )
 
 
@@ -76,7 +76,7 @@ def test_p1_routes_to_todo_only() -> None:
 
 def test_p2_home_with_active_room_is_voice_only() -> None:
     coordinator = make_coordinator(
-        on_entities={"binary_sensor.az"},
+        on_entities={"binary_sensor.study"},
         rooms=[SAT_ROOM],
         config={CONF_TELEGRAM_CHAT_ID: "123"},
     )
@@ -96,7 +96,7 @@ def test_p2_away_goes_push_and_telegram() -> None:
 
 def test_p2_offline_without_fallback_uses_push() -> None:
     coordinator = make_coordinator(
-        on_entities={"binary_sensor.az"}, rooms=[SAT_ROOM]
+        on_entities={"binary_sensor.study"}, rooms=[SAT_ROOM]
     )
     notification = Notification(message="x", priority=2)
     assert _channel_names(
@@ -106,7 +106,7 @@ def test_p2_offline_without_fallback_uses_push() -> None:
 
 def test_p2_offline_with_fallback_keeps_voice() -> None:
     coordinator = make_coordinator(
-        on_entities={"binary_sensor.az"},
+        on_entities={"binary_sensor.study"},
         rooms=[SAT_ROOM],
         voice_offline_capable=True,
     )
@@ -118,7 +118,7 @@ def test_p2_offline_with_fallback_keeps_voice() -> None:
 
 def test_p3_home_uses_all_channels() -> None:
     coordinator = make_coordinator(
-        on_entities={"binary_sensor.az"},
+        on_entities={"binary_sensor.study"},
         rooms=[SAT_ROOM],
         config={CONF_TELEGRAM_CHAT_ID: "123"},
     )
@@ -130,7 +130,7 @@ def test_p3_home_uses_all_channels() -> None:
 
 def test_query_sat_room_voice_captures_answer() -> None:
     coordinator = make_coordinator(
-        on_entities={"binary_sensor.az"},
+        on_entities={"binary_sensor.study"},
         rooms=[SAT_ROOM],
         config={CONF_TELEGRAM_CHAT_ID: "123"},
     )
@@ -141,9 +141,9 @@ def test_query_sat_room_voice_captures_answer() -> None:
 
 
 def test_query_media_only_room_adds_telegram_buttons() -> None:
-    """A Sonos-only room speaks the question but cannot capture the answer."""
+    """A speaker-only room speaks the question but cannot capture the answer."""
     coordinator = make_coordinator(
-        on_entities={"binary_sensor.bad"},
+        on_entities={"binary_sensor.bathroom"},
         rooms=[MEDIA_ROOM],
         config={CONF_TELEGRAM_CHAT_ID: "123"},
     )
@@ -163,7 +163,7 @@ def test_query_away_goes_telegram_only_for_p2() -> None:
 
 def test_query_p3_adds_push() -> None:
     coordinator = make_coordinator(
-        on_entities={"binary_sensor.az"},
+        on_entities={"binary_sensor.study"},
         rooms=[SAT_ROOM],
         config={CONF_TELEGRAM_CHAT_ID: "123"},
     )

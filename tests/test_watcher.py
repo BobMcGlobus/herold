@@ -4,7 +4,7 @@ from custom_components.herold.models import Watch
 
 
 def _watch(**kwargs) -> Watch:
-    kwargs.setdefault("entity_id", "binary_sensor.haustuer")
+    kwargs.setdefault("entity_id", "binary_sensor.front_door")
     kwargs.setdefault("payload", {"message": "Paket mitgeben!"})
     return Watch(**kwargs)
 
@@ -35,7 +35,7 @@ def test_any_change_without_target_state() -> None:
 
 
 def test_below_threshold_fires_on_crossing_only() -> None:
-    watch = _watch(entity_id="sensor.temperatur", below=5.0)
+    watch = _watch(entity_id="sensor.temperature", below=5.0)
     assert watch.matches("6.0", "4.5") is True
     # Already below — no new crossing
     assert watch.matches("4.5", "4.0") is False
@@ -43,13 +43,13 @@ def test_below_threshold_fires_on_crossing_only() -> None:
 
 
 def test_above_threshold_fires_on_crossing_only() -> None:
-    watch = _watch(entity_id="sensor.temperatur", above=25.0)
+    watch = _watch(entity_id="sensor.temperature", above=25.0)
     assert watch.matches("24.0", "26.0") is True
     assert watch.matches("26.0", "27.0") is False
 
 
 def test_numeric_watch_ignores_non_numeric_states() -> None:
-    watch = _watch(entity_id="sensor.temperatur", below=5.0)
+    watch = _watch(entity_id="sensor.temperature", below=5.0)
     assert watch.matches("6.0", "unavailable") is False
 
 
@@ -61,10 +61,10 @@ def test_describe_renders_german_conditions() -> None:
 
 
 def test_describe_prefers_friendly_name() -> None:
-    watch = _watch(to_state="on", friendly_name="Haustür")
-    assert "Haustür" in watch.describe()
+    watch = _watch(to_state="on", friendly_name="Front door")
+    assert "Front door" in watch.describe()
 
 
 def test_roundtrip() -> None:
-    watch = _watch(to_state="on", friendly_name="Haustür", once=True)
+    watch = _watch(to_state="on", friendly_name="Front door", once=True)
     assert Watch.from_dict(watch.to_dict()) == watch

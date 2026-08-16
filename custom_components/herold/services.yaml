@@ -184,7 +184,7 @@ schedule:
       selector:
         text:
     task_context:
-      example: "Jonas wollte den Kuchen um 18 Uhr aus dem Ofen holen."
+      example: "Der Kuchen soll um 18 Uhr aus dem Ofen."
       selector:
         text:
           multiline: true
@@ -203,7 +203,7 @@ remind_self:
         text:
           multiline: true
     task_context:
-      example: "Jonas backt gerade einen Kuchen und wollte in 30 min Bescheid."
+      example: "Es backt gerade ein Kuchen, Rückmeldung in 30 min gewünscht."
       selector:
         text:
           multiline: true
