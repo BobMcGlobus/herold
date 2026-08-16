@@ -28,6 +28,7 @@ from .const import (
     TODO_STATUS_OPEN,
     WEEKDAYS,
 )
+from .entity_resolver import normalize_trigger, resolve_entity
 from .models import Alarm, Schedule, Watch
 from .scheduler import parse_when
 from .watcher import ttl_to_expiry
@@ -315,20 +316,29 @@ class RemindWhenTool(HeroldTool):
         "without a fixed time. Use it for 'wenn ich das nächste Mal die "
         "Haustür öffne', 'sobald die Waschmaschine fertig ist', 'wenn ich "
         "nach Hause komme', 'wenn es unter 5 Grad wird'. "
-        "\n\nParameters: entity_id (the entity to observe — pick it from the "
-        "exposed entities), message (what to announce when it happens), "
-        "optionally to_state (e.g. 'on', 'open', 'home'), above/below for "
-        "numeric sensors, priority (default 2) and ttl_hours (default 72, "
-        "0 = never expires). "
-        "\n\nThe result contains the resolved friendly name in "
-        "'confirmation' — read it back so the user can catch a wrong entity. "
-        "The watch fires once and then removes itself."
+        "\n\nParameters: entity (the device to observe — an exact entity id "
+        "if you know it, otherwise just the name the user said, e.g. "
+        "'Klimaanlage Arbeitszimmer'; it is matched against the exposed "
+        "entities and their aliases), message (what to announce when it "
+        "happens), optionally to_state (e.g. 'on', 'open', 'home'), "
+        "above/below for numeric sensors, priority (default 2) and ttl_hours "
+        "(default 72, 0 = never expires). "
+        "\n\nUse to_state='on' for 'turns on' and 'off' for 'turns off' "
+        "whatever the domain is — Herold translates that into the states the "
+        "device actually reports (a climate entity reports 'cool'/'heat', "
+        "not 'on'). "
+        "\n\nIf the entity cannot be matched, the error lists concrete "
+        "entity ids — call again with one of them instead of guessing, or "
+        "ask the user which device is meant. The result contains the "
+        "resolved friendly name in 'confirmation'; read it back so a wrong "
+        "match is caught. The watch fires once and then removes itself."
     )
     parameters = vol.Schema(
         {
-            vol.Required("entity_id"): str,
+            vol.Required("entity"): str,
             vol.Required("message"): str,
             vol.Optional("to_state"): str,
+            vol.Optional("from_state"): str,
             vol.Optional("above"): vol.Coerce(float),
             vol.Optional("below"): vol.Coerce(float),
             vol.Optional("priority"): vol.All(
@@ -342,25 +352,26 @@ class RemindWhenTool(HeroldTool):
 
     async def _run(self, **kwargs: Any) -> dict[str, Any]:
         coordinator = self.coordinator
-        entity_id = kwargs["entity_id"]
-        state = coordinator.hass.states.get(entity_id)
-        if state is None:
-            raise HomeAssistantError(
-                f"Unknown entity {entity_id} — pick one of the exposed entities"
-            )
+        # Accept "entity_id" too — models reach for it out of habit.
+        reference = kwargs.get("entity") or kwargs.get("entity_id") or ""
+        entity_id, friendly_name = resolve_entity(coordinator.hass, reference)
+        to_state, from_state = normalize_trigger(
+            entity_id, kwargs.get("to_state"), kwargs.get("from_state")
+        )
         watch = Watch(
             entity_id=entity_id,
             payload={
                 "message": kwargs["message"],
                 "priority": kwargs.get("priority", DEFAULT_PRIORITY),
             },
-            to_state=kwargs.get("to_state"),
+            to_state=to_state,
+            from_state=from_state,
             above=kwargs.get("above"),
             below=kwargs.get("below"),
             expires_at=ttl_to_expiry(
                 kwargs.get("ttl_hours", DEFAULT_WATCH_TTL_HOURS)
             ),
-            friendly_name=state.attributes.get("friendly_name"),
+            friendly_name=friendly_name,
         )
         await coordinator.watcher.async_add(watch)
         return self._confirm(

@@ -284,9 +284,16 @@ data:
 
 Watches are one-shot (they remove themselves afterwards), survive restarts,
 expire after their TTL and appear in the card under *scheduled → by event*.
-The LLM creates them via `herold_remind_when` and gets the entity's friendly
-name back, so a wrong match is audible immediately. Automations can trigger
-on `herold_watch_triggered`.
+Automations can trigger on `herold_watch_triggered`.
+
+The LLM creates them via `herold_remind_when` and does **not** need to know
+exact entity ids: the reference is matched against the exposed entities,
+their friendly names and their voice aliases, so "Klimaanlage Arbeitszimmer"
+resolves on its own. If nothing matches, the error lists concrete entity ids
+so the model can correct itself instead of guessing again. `to_state: "on"`
+works for every domain — for entities that never report "on" (climate,
+media_player, cover, …) Herold rewrites it to "left the off state", which is
+what "turns on" means.
 
 ## Dashboard card
 

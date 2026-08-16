@@ -220,7 +220,9 @@ data:
   message: Es wird frostig — denk an die Pflanzen auf dem Balkon.
 ```
 
-Beobachtungen sind einmalig (danach löschen sie sich selbst), überleben Neustarts, verfallen nach der TTL und tauchen in der Karte unter „Geplant → Nach Ereignis" auf. Das LLM legt sie über `herold_remind_when` an und bekommt den Klarnamen der Entity zurück, damit du eine falsche Zuordnung sofort hörst. Automationen können auf `herold_watch_triggered` triggern.
+Beobachtungen sind einmalig (danach löschen sie sich selbst), überleben Neustarts, verfallen nach der TTL und tauchen in der Karte unter „Geplant → Nach Ereignis" auf. Automationen können auf `herold_watch_triggered` triggern.
+
+Das LLM legt sie über `herold_remind_when` an und muss die exakte Entity-ID **nicht** kennen: Die Angabe wird gegen die exponierten Entities, ihre Klarnamen und ihre Sprach-Aliase gematcht — „Klimaanlage Arbeitszimmer" findet sich also von selbst. Passt nichts, nennt die Fehlermeldung konkrete Entity-IDs, damit sich das Modell korrigieren kann statt erneut zu raten. `to_state: "on"` funktioniert in jeder Domain: Bei Entities, die nie „on" melden (climate, media_player, cover, …), übersetzt Herold das in „hat den Aus-Zustand verlassen" — also genau das, was „geht an" bedeutet.
 
 ## Dashboard-Karte
 

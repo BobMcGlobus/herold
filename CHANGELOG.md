@@ -6,6 +6,24 @@ README) are German — see `translations/`. Entity ids below use the English
 names; on a German instance they are the translated ones, e.g.
 `sensor.herold_naechster_wecker` for `sensor.*_next_alarm`.
 
+## 1.0.1 — Watches actually reachable from voice
+
+- `herold_remind_when` no longer requires the model to know exact entity
+  ids. The reference is resolved against exposed entities, their friendly
+  names and their voice aliases, with a domain prefix narrowing the field —
+  so a guessed `climate.ac_arbeitszimmer` finds
+  `climate.klimaanlage_arbeitszimmer`
+- When nothing matches, the error now **lists concrete entity ids** instead
+  of "pick one of the exposed entities", which is what lets the model
+  correct itself instead of guessing again; an entity that exists but is not
+  exposed says exactly that
+- `to_state: "on"` works for every domain: for entities that never report
+  "on" (climate, media_player, cover, …) it is rewritten to "left the off
+  state", which is what "turns on" means. German state words (an, aus,
+  offen, zu, zuhause) are mapped too — in the service as well
+- The tool parameter is now `entity` (an id or a name); `entity_id` keeps
+  working
+
 ## 1.0.0 — Alarm clock
 
 - Alarm management: one-shot or repeating on weekdays, with label and a

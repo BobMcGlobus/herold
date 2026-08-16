@@ -75,6 +75,7 @@ from .const import (
     SERVICE_WATCH,
     WEEKDAYS,
 )
+from .entity_resolver import normalize_trigger
 from .models import Alarm, Notification, Query, Schedule, Watch
 from .scheduler import parse_when
 from .templates import resolve_template
@@ -370,11 +371,16 @@ async def _async_handle_watch(call: ServiceCall) -> None:
     }
     if task_context := call.data.get(ATTR_TASK_CONTEXT):
         payload["context"] = {"task_context": task_context}
+    entity_id = call.data[ATTR_ENTITY_ID]
+    # "on" means "left the off state" for domains that never report "on".
+    to_state, from_state = normalize_trigger(
+        entity_id, call.data.get(ATTR_TO_STATE), call.data.get(ATTR_FROM_STATE)
+    )
     watch = Watch(
-        entity_id=call.data[ATTR_ENTITY_ID],
+        entity_id=entity_id,
         payload=payload,
-        to_state=call.data.get(ATTR_TO_STATE),
-        from_state=call.data.get(ATTR_FROM_STATE),
+        to_state=to_state,
+        from_state=from_state,
         above=call.data.get(ATTR_ABOVE),
         below=call.data.get(ATTR_BELOW),
         expires_at=ttl_to_expiry(call.data[ATTR_TTL_HOURS]),
