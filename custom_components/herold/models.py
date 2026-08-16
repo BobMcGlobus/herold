@@ -18,6 +18,9 @@ from .const import (
     LEGACY_DEFAULT_CALLBACK,
     QUERY_MODE_YESNO,
     QUERY_STATUS_PENDING,
+    VOLUME_LOUD,
+    VOLUME_NORMAL,
+    VOLUME_QUIET,
 )
 
 if TYPE_CHECKING:
@@ -338,6 +341,17 @@ class Room:
     media_player_entity: str | None = None
     flash_entities: list[str] = field(default_factory=list)
     priority_weight: int = DEFAULT_PRIORITY_WEIGHT
+    volume_quiet: float | None = None
+    volume_normal: float | None = None
+    volume_loud: float | None = None
+
+    def volume_for(self, level: str) -> float | None:
+        """Return the configured volume for a level, if the user set one."""
+        return {
+            VOLUME_QUIET: self.volume_quiet,
+            VOLUME_NORMAL: self.volume_normal,
+            VOLUME_LOUD: self.volume_loud,
+        }.get(level)
 
     def is_occupied(self, hass: HomeAssistant) -> bool:
         """Return True if any occupancy sensor of the room is on (OR-linked)."""
@@ -363,6 +377,9 @@ class Room:
             "media_player_entity": self.media_player_entity,
             "flash_entities": self.flash_entities,
             "priority_weight": self.priority_weight,
+            "volume_quiet": self.volume_quiet,
+            "volume_normal": self.volume_normal,
+            "volume_loud": self.volume_loud,
         }
 
     @classmethod
@@ -379,6 +396,9 @@ class Room:
             media_player_entity=data.get("media_player_entity"),
             flash_entities=flash_entities,
             priority_weight=data.get("priority_weight", DEFAULT_PRIORITY_WEIGHT),
+            volume_quiet=data.get("volume_quiet"),
+            volume_normal=data.get("volume_normal"),
+            volume_loud=data.get("volume_loud"),
         )
 
 

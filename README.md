@@ -157,6 +157,12 @@ ausdrücklich eine Nachricht oder Durchsage.
 
 **Wichtig für die Migration:** Entferne das alte `script.ai_schedule_command` aus der Assist-Exposure (Einstellungen → Sprachassistenten → Entitäten), sonst greift das LLM weiterhin zum alten Kalender-Workflow statt zu `herold_remind_self`. Die Todos landen übrigens **nicht** im Prompt — `herold_list_pending` ist ein Live-Tool-Call, es gibt kein Caching-Problem.
 
+## Lautstärke & Ruhezeiten
+
+Pro Raum lassen sich drei Lautstärkestufen hinterlegen (Optionen → Räume): **leise**, **normal**, **laut**. Herold setzt die passende Stufe vor der Durchsage und stellt danach die vorherige Lautstärke wieder her — erst wenn der Player wirklich fertig gesprochen hat. Stufen, die du leer lässt, ändern nichts: Ohne Konfiguration bleibt alles wie bisher.
+
+Welche Stufe genommen wird: **P4 immer laut**, sonst **normal** — außer innerhalb der **Ruhezeiten** (Optionen → Nicht stören, z.B. 22:00–07:00), dann **leise**. Ein Alarm um drei Uhr nachts bleibt also laut, eine normale Meldung nicht.
+
 ## Erinnerungen an Ereignisse knüpfen
 
 Neben zeitbasierten Erinnerungen kann Herold auf **Zustandsänderungen** warten — kleine Einmal-Automationen, die sich der Assistent selbst anlegt:

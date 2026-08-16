@@ -45,6 +45,11 @@ CONF_SAT_ENTITY: Final = "sat_entity"
 CONF_MEDIA_PLAYER_ENTITY: Final = "media_player_entity"
 CONF_FLASH_ENTITIES: Final = "flash_entities"
 CONF_PRIORITY_WEIGHT: Final = "priority_weight"
+CONF_VOLUME_QUIET: Final = "volume_quiet"
+CONF_VOLUME_NORMAL: Final = "volume_normal"
+CONF_VOLUME_LOUD: Final = "volume_loud"
+CONF_QUIET_HOURS_START: Final = "quiet_hours_start"
+CONF_QUIET_HOURS_END: Final = "quiet_hours_end"
 CONF_PRIMARY_TTS: Final = "primary_tts_entity"
 CONF_FALLBACK_TTS: Final = "fallback_tts_entity"
 CONF_INTERNET_SENSOR: Final = "internet_sensor"
@@ -193,6 +198,19 @@ ATTR_UNTIL_HOME: Final = "until_home"
 # Voice channel behavior (ported from the original script)
 ALARM_VOICE_PREFIX: Final = "ACHTUNG! KRITISCHE MELDUNG!"
 ALARM_ANNOUNCE_DELAY_SECONDS: Final = 3
+
+# Volume levels (per room, all optional — unset means "leave as is")
+VOLUME_QUIET: Final = "quiet"
+VOLUME_NORMAL: Final = "normal"
+VOLUME_LOUD: Final = "loud"
+VOLUME_LEVELS: Final = (VOLUME_QUIET, VOLUME_NORMAL, VOLUME_LOUD)
+
+ATTR_VOLUME: Final = "volume"
+
+# How long to wait for a media player to finish speaking before the
+# previous volume is restored (polled, not a fixed sleep).
+VOLUME_RESTORE_TIMEOUT_SECONDS: Final = 60
+VOLUME_RESTORE_POLL_SECONDS: Final = 0.5
 
 TEST_NOTIFICATION_MESSAGE: Final = "Herold Test-Nachricht — funktioniert"
 

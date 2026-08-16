@@ -18,7 +18,10 @@
           "sat_entity": "Assist satellite",
           "media_player_entity": "Media player",
           "flash_entities": "Alarm flash (lights and scenes, P4)",
-          "priority_weight": "Priority weight"
+          "priority_weight": "Priority weight",
+          "volume_quiet": "Volume: quiet (%)",
+          "volume_normal": "Volume: normal (%)",
+          "volume_loud": "Volume: loud / alarm (%)"
         }
       },
       "room_menu": {
@@ -64,7 +67,9 @@
         "title": "Do not disturb",
         "data": {
           "external_dnd_entity": "External DND entity",
-          "create_internal_switch": "Create internal DND switch"
+          "create_internal_switch": "Create internal DND switch",
+          "quiet_hours_start": "Quiet hours start",
+          "quiet_hours_end": "Quiet hours end"
         }
       },
       "offline": {
@@ -140,7 +145,9 @@
         "title": "Do not disturb",
         "data": {
           "external_dnd_entity": "External DND entity",
-          "create_internal_switch": "Create internal DND switch"
+          "create_internal_switch": "Create internal DND switch",
+          "quiet_hours_start": "Quiet hours start",
+          "quiet_hours_end": "Quiet hours end"
         }
       },
       "offline": {
@@ -167,7 +174,10 @@
           "sat_entity": "Assist satellite",
           "media_player_entity": "Media player",
           "flash_entities": "Alarm flash (lights and scenes, P4)",
-          "priority_weight": "Priority weight"
+          "priority_weight": "Priority weight",
+          "volume_quiet": "Volume: quiet (%)",
+          "volume_normal": "Volume: normal (%)",
+          "volume_loud": "Volume: loud / alarm (%)"
         }
       },
       "room_edit": {
@@ -184,7 +194,10 @@
           "sat_entity": "Assist satellite",
           "media_player_entity": "Media player",
           "flash_entities": "Alarm flash (lights and scenes, P4)",
-          "priority_weight": "Priority weight"
+          "priority_weight": "Priority weight",
+          "volume_quiet": "Volume: quiet (%)",
+          "volume_normal": "Volume: normal (%)",
+          "volume_loud": "Volume: loud / alarm (%)"
         }
       },
       "room_remove": {

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 import logging
 from typing import TYPE_CHECKING
 
@@ -16,13 +17,35 @@ from ..const import (
     PRIORITY_ALARM,
     QUERY_MODE_CHOICE,
 )
+from ..quiet_hours import level_for
 from .base import BaseChannel, ChannelUnavailable
 
 if TYPE_CHECKING:
     from ..coordinator import HeroldCoordinator
-    from ..models import Notification, Query
+    from ..models import Notification, Query, Room
 
 _LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class VoiceTarget:
+    """Everything one announcement needs, resolved once per delivery."""
+
+    sat_entity: str | None
+    media_player_entity: str | None
+    flash_entities: list[str]
+    room: Room | None
+
+    def volume_for(self, level: str) -> tuple[str | None, float | None]:
+        """Return (player to adjust, volume) for the given level."""
+        if self.room is None:
+            return (None, None)
+        # A satellite plays through its own media player entity, so the room's
+        # media player is the volume target in both cases when configured.
+        entity_id = self.media_player_entity or self.room.media_player_entity
+        if entity_id is None:
+            return (None, None)
+        return (entity_id, self.room.volume_for(level))
 
 
 class VoiceChannel(BaseChannel):
@@ -39,35 +62,14 @@ class VoiceChannel(BaseChannel):
         self, notification: Notification, coordinator: HeroldCoordinator
     ) -> None:
         """Announce via satellite or speak via TTS on a media player."""
-        outputs = await self._resolve_outputs(
-            notification.target_player, coordinator
+        target = await self._resolve(notification.target_player, coordinator)
+        await self._speak_out(
+            coordinator,
+            target,
+            notification.message,
+            notification.priority,
+            query=None,
         )
-        if outputs is None:
-            # Raise instead of silently skipping so the delivery result
-            # records the miss (visible in the last_delivery sensor errors).
-            raise ChannelUnavailable("No occupied voice-capable room")
-        sat_entity, media_player_entity, flash_entities = outputs
-
-        if notification.priority == PRIORITY_ALARM:
-            await self._flash(coordinator, flash_entities)
-
-        if sat_entity:
-            await self._alarm_preannounce(
-                coordinator, sat_entity, notification.priority
-            )
-            await coordinator.hass.services.async_call(
-                "assist_satellite",
-                "announce",
-                {"entity_id": sat_entity, "message": notification.message},
-                blocking=True,
-            )
-        elif media_player_entity:
-            # Media-player-only room (e.g. bathroom with a Sonos Roam)
-            await self._speak(
-                coordinator, media_player_entity, notification.message
-            )
-        else:
-            raise ChannelUnavailable("Active room has no usable output entity")
 
     async def deliver_query(
         self, query: Query, coordinator: HeroldCoordinator
@@ -78,35 +80,56 @@ class VoiceChannel(BaseChannel):
         script behavior) — the answer then has to come through another
         channel (Telegram buttons), which the dispatcher accounts for.
         """
-        outputs = await self._resolve_outputs(query.target_player, coordinator)
-        if outputs is None:
-            raise ChannelUnavailable("No occupied voice-capable room")
-        sat_entity, media_player_entity, flash_entities = outputs
+        target = await self._resolve(query.target_player, coordinator)
+        await self._speak_out(
+            coordinator, target, query.question, query.priority, query=query
+        )
 
-        if query.priority == PRIORITY_ALARM:
-            await self._flash(coordinator, flash_entities)
+    async def _speak_out(
+        self,
+        coordinator: HeroldCoordinator,
+        target: VoiceTarget,
+        text: str,
+        priority: int,
+        query: Query | None,
+    ) -> None:
+        """Run the flash hook and the actual voice output at the right volume."""
+        if priority == PRIORITY_ALARM:
+            await self._flash(coordinator, target.flash_entities)
 
-        if sat_entity:
-            await self._alarm_preannounce(coordinator, sat_entity, query.priority)
-            data = {"entity_id": sat_entity, "start_message": query.question}
-            if query.mode == QUERY_MODE_CHOICE and query.choices:
-                data["extra_system_prompt"] = (
-                    "The user was just asked a question with predefined "
-                    f"answer options: {', '.join(query.choices)}. Map their "
-                    "spoken reply to one of these options."
+        level = level_for(priority, coordinator.config)
+        player, volume = target.volume_for(level)
+
+        async with coordinator.volume.announce_at(player, volume):
+            if target.sat_entity:
+                await self._alarm_preannounce(
+                    coordinator, target.sat_entity, priority
                 )
-            await coordinator.hass.services.async_call(
-                "assist_satellite", "start_conversation", data, blocking=True
-            )
-        elif media_player_entity:
-            await self._speak(coordinator, media_player_entity, query.question)
-        else:
-            raise ChannelUnavailable("Active room has no usable output entity")
+                if query is not None:
+                    await self._start_conversation(
+                        coordinator, target.sat_entity, query
+                    )
+                else:
+                    await coordinator.hass.services.async_call(
+                        "assist_satellite",
+                        "announce",
+                        {"entity_id": target.sat_entity, "message": text},
+                        blocking=True,
+                    )
+            elif target.media_player_entity:
+                # Media-player-only room (e.g. bathroom with a Sonos Roam)
+                await self._speak(
+                    coordinator, target.media_player_entity, text
+                )
+            else:
+                raise ChannelUnavailable(
+                    "Active room has no usable output entity"
+                )
 
-    async def _resolve_outputs(
+    async def _resolve(
         self, target_player: str | None, coordinator: HeroldCoordinator
-    ) -> tuple[str | None, str | None, list[str]] | None:
-        """Return (sat, media_player, flash_entities) or None if no target."""
+    ) -> VoiceTarget:
+        """Pick the output entities for this delivery."""
         room = await coordinator.async_get_active_room()
         flash_entities = room.flash_entities if room else []
 
@@ -114,11 +137,29 @@ class VoiceChannel(BaseChannel):
             # Explicit target overrides room detection (original script
             # behavior); the active room still provides the P4 flash target.
             if target_player.startswith("assist_satellite."):
-                return (target_player, None, flash_entities)
-            return (None, target_player, flash_entities)
+                return VoiceTarget(target_player, None, flash_entities, room)
+            return VoiceTarget(None, target_player, flash_entities, room)
         if room is None:
-            return None
-        return (room.sat_entity, room.media_player_entity, flash_entities)
+            # Raise instead of silently skipping so the delivery result
+            # records the miss (visible in the last_delivery sensor errors).
+            raise ChannelUnavailable("No occupied voice-capable room")
+        return VoiceTarget(
+            room.sat_entity, room.media_player_entity, flash_entities, room
+        )
+
+    async def _start_conversation(
+        self, coordinator: HeroldCoordinator, sat_entity: str, query: Query
+    ) -> None:
+        data = {"entity_id": sat_entity, "start_message": query.question}
+        if query.mode == QUERY_MODE_CHOICE and query.choices:
+            data["extra_system_prompt"] = (
+                "The user was just asked a question with predefined "
+                f"answer options: {', '.join(query.choices)}. Map their "
+                "spoken reply to one of these options."
+            )
+        await coordinator.hass.services.async_call(
+            "assist_satellite", "start_conversation", data, blocking=True
+        )
 
     async def _flash(
         self, coordinator: HeroldCoordinator, flash_entities: list[str]

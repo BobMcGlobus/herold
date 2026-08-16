@@ -23,6 +23,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorMode,
     TextSelector,
     TextSelectorConfig,
+    TimeSelector,
 )
 import voluptuous as vol
 
@@ -45,12 +46,17 @@ from .const import (
     CONF_PENDING_QUESTION_ENTITY,
     CONF_PRIMARY_TTS,
     CONF_PRIORITY_WEIGHT,
+    CONF_QUIET_HOURS_END,
+    CONF_QUIET_HOURS_START,
     CONF_RECIPIENT,
     CONF_ROOM_NAME,
     CONF_ROOMS,
     CONF_SAT_ENTITY,
     CONF_TELEGRAM_CHAT_ID,
     CONF_TEMPLATES,
+    CONF_VOLUME_LOUD,
+    CONF_VOLUME_NORMAL,
+    CONF_VOLUME_QUIET,
     DEFAULT_CREATE_INTERNAL_SWITCH,
     DEFAULT_ENABLE_OFFLINE_FALLBACK,
     DEFAULT_ENABLE_OFFLINE_QUEUE,
@@ -70,6 +76,10 @@ USER_SCHEMA = vol.Schema(
             CONF_INTEGRATION_NAME, default=DEFAULT_INTEGRATION_NAME
         ): TextSelector(),
     }
+)
+
+_VOLUME_SELECTOR = NumberSelector(
+    NumberSelectorConfig(min=0, max=100, step=1, mode=NumberSelectorMode.SLIDER)
 )
 
 ROOM_SCHEMA = vol.Schema(
@@ -92,6 +102,9 @@ ROOM_SCHEMA = vol.Schema(
         ): NumberSelector(
             NumberSelectorConfig(min=0, max=100, step=1, mode=NumberSelectorMode.BOX)
         ),
+        vol.Optional(CONF_VOLUME_QUIET): _VOLUME_SELECTOR,
+        vol.Optional(CONF_VOLUME_NORMAL): _VOLUME_SELECTOR,
+        vol.Optional(CONF_VOLUME_LOUD): _VOLUME_SELECTOR,
     }
 )
 
@@ -152,6 +165,8 @@ DND_SCHEMA = vol.Schema(
         vol.Required(
             CONF_CREATE_INTERNAL_SWITCH, default=DEFAULT_CREATE_INTERNAL_SWITCH
         ): BooleanSelector(),
+        vol.Optional(CONF_QUIET_HOURS_START): TimeSelector(),
+        vol.Optional(CONF_QUIET_HOURS_END): TimeSelector(),
     }
 )
 
@@ -190,7 +205,12 @@ LLM_KEYS = (
     CONF_ENABLE_TOOL_CONFIRMATIONS,
     CONF_ENABLE_P0_VERIFICATION,
 )
-DND_KEYS = (CONF_EXTERNAL_DND_ENTITY, CONF_CREATE_INTERNAL_SWITCH)
+DND_KEYS = (
+    CONF_EXTERNAL_DND_ENTITY,
+    CONF_CREATE_INTERNAL_SWITCH,
+    CONF_QUIET_HOURS_START,
+    CONF_QUIET_HOURS_END,
+)
 OFFLINE_KEYS = (CONF_ENABLE_OFFLINE_FALLBACK, CONF_ENABLE_OFFLINE_QUEUE)
 
 
@@ -220,6 +240,32 @@ def _normalize_template(
     return name, template
 
 
+def _percent_to_level(value: Any) -> float | None:
+    """Convert the percent slider to the 0..1 volume level HA expects."""
+    if value in (None, ""):
+        return None
+    return round(float(value) / 100, 3)
+
+
+def _level_to_percent(value: Any) -> float | None:
+    """Convert a stored 0..1 volume level back to the percent slider."""
+    if value in (None, ""):
+        return None
+    return round(float(value) * 100)
+
+
+def _room_form_values(room: dict[str, Any]) -> dict[str, Any]:
+    """Prefill values for the room form (volumes shown as percent)."""
+    prefilled = dict(room)
+    for key in (CONF_VOLUME_QUIET, CONF_VOLUME_NORMAL, CONF_VOLUME_LOUD):
+        percent = _level_to_percent(room.get(key))
+        if percent is None:
+            prefilled.pop(key, None)
+        else:
+            prefilled[key] = percent
+    return prefilled
+
+
 def _normalize_room(user_input: dict[str, Any]) -> dict[str, Any]:
     """Normalize a room form result for config entry storage."""
     return {
@@ -231,6 +277,12 @@ def _normalize_room(user_input: dict[str, Any]) -> dict[str, Any]:
         CONF_PRIORITY_WEIGHT: int(
             user_input.get(CONF_PRIORITY_WEIGHT, DEFAULT_PRIORITY_WEIGHT)
         ),
+        # Stored as 0..1 fractions; the UI shows percent.
+        CONF_VOLUME_QUIET: _percent_to_level(user_input.get(CONF_VOLUME_QUIET)),
+        CONF_VOLUME_NORMAL: _percent_to_level(
+            user_input.get(CONF_VOLUME_NORMAL)
+        ),
+        CONF_VOLUME_LOUD: _percent_to_level(user_input.get(CONF_VOLUME_LOUD)),
     }
 
 
@@ -517,7 +569,7 @@ class HeroldOptionsFlow(OptionsFlow):
         return self.async_show_form(
             step_id="room_edit_form",
             data_schema=self.add_suggested_values_to_schema(
-                ROOM_SCHEMA, user_input or room
+                ROOM_SCHEMA, user_input or _room_form_values(room)
             ),
             errors=errors or None,
         )

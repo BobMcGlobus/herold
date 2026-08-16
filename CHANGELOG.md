@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.0 — Lautstärke & Ruhezeiten
+
+- Drei optionale Lautstärkestufen pro Raum (leise / normal / laut) in
+  Prozent; nicht gesetzte Stufen lassen die Lautstärke unangetastet
+- Nach der Durchsage wird die vorherige Lautstärke wiederhergestellt —
+  erst wenn der Player wirklich fertig ist (Polling statt fixem Delay),
+  und bei überlappenden Durchsagen nur einmal am Ende
+- Player ohne `volume_set` werden übersprungen statt Fehler zu werfen
+- **Ruhezeiten** (Optionen → Nicht stören): im Zeitfenster sprechen P2/P3
+  auf der leisen Stufe, P4 bleibt immer laut
+
 ## 0.8.0 — Ereignis-Trigger
 
 - Neuer Service `herold.watch`: Erinnerungen, die auf eine

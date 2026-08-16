@@ -18,7 +18,10 @@
           "sat_entity": "Assist-Satellit",
           "media_player_entity": "Media Player",
           "flash_entities": "Alarm-Blinken (Lichter und Szenen, P4)",
-          "priority_weight": "Prioritätsgewicht"
+          "priority_weight": "Prioritätsgewicht",
+          "volume_quiet": "Lautstärke: leise (%)",
+          "volume_normal": "Lautstärke: normal (%)",
+          "volume_loud": "Lautstärke: laut / Alarm (%)"
         }
       },
       "room_menu": {
@@ -64,7 +67,9 @@
         "title": "Nicht stören",
         "data": {
           "external_dnd_entity": "Externe DND-Entität",
-          "create_internal_switch": "Internen DND-Schalter erstellen"
+          "create_internal_switch": "Internen DND-Schalter erstellen",
+          "quiet_hours_start": "Ruhezeit von",
+          "quiet_hours_end": "Ruhezeit bis"
         }
       },
       "offline": {
@@ -140,7 +145,9 @@
         "title": "Nicht stören",
         "data": {
           "external_dnd_entity": "Externe DND-Entität",
-          "create_internal_switch": "Internen DND-Schalter erstellen"
+          "create_internal_switch": "Internen DND-Schalter erstellen",
+          "quiet_hours_start": "Ruhezeit von",
+          "quiet_hours_end": "Ruhezeit bis"
         }
       },
       "offline": {
@@ -167,7 +174,10 @@
           "sat_entity": "Assist-Satellit",
           "media_player_entity": "Media Player",
           "flash_entities": "Alarm-Blinken (Lichter und Szenen, P4)",
-          "priority_weight": "Prioritätsgewicht"
+          "priority_weight": "Prioritätsgewicht",
+          "volume_quiet": "Lautstärke: leise (%)",
+          "volume_normal": "Lautstärke: normal (%)",
+          "volume_loud": "Lautstärke: laut / Alarm (%)"
         }
       },
       "room_edit": {
@@ -184,7 +194,10 @@
           "sat_entity": "Assist-Satellit",
           "media_player_entity": "Media Player",
           "flash_entities": "Alarm-Blinken (Lichter und Szenen, P4)",
-          "priority_weight": "Prioritätsgewicht"
+          "priority_weight": "Prioritätsgewicht",
+          "volume_quiet": "Lautstärke: leise (%)",
+          "volume_normal": "Lautstärke: normal (%)",
+          "volume_loud": "Lautstärke: laut / Alarm (%)"
         }
       },
       "room_remove": {

@@ -69,6 +69,7 @@ from .rate_limiter import RateLimiter
 from .room_router import select_room
 from .scheduler import HeroldScheduler
 from .store import HeroldStore
+from .volume import VolumeController
 from .watcher import HeroldWatcher
 
 if TYPE_CHECKING:
@@ -96,6 +97,7 @@ class HeroldCoordinator:
         self.scheduler = HeroldScheduler(self)
         self.watcher = HeroldWatcher(self)
         self.rate_limiter = RateLimiter(self)
+        self.volume = VolumeController(hass)
         self.last_result: DeliveryResult | None = None
         self.last_priority: int | None = None
         self.last_internal: InternalResult | None = None
