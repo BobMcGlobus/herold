@@ -6,6 +6,17 @@ README) are German — see `translations/`. Entity ids below use the English
 names; on a German instance they are the translated ones, e.g.
 `sensor.herold_naechster_wecker` for `sensor.*_next_alarm`.
 
+## 1.0.2 — Tool errors no longer abort the conversation
+
+- A tool raising an unexpected exception used to kill the whole voice
+  pipeline with "intent-failed", leaving the user without any answer. Tools
+  now catch anything, log it with a traceback and return a normal failure
+  result the agent can talk about
+- Fixes the crash behind that: `friendly_name` is not always a string in
+  HA 2026 (computed names use a sentinel object), and the resolver called
+  `.lower()` on it. Non-text names and aliases are ignored now and the
+  entity id is used as the label instead
+
 ## 1.0.1 — Watches actually reachable from voice
 
 - `herold_remind_when` no longer requires the model to know exact entity

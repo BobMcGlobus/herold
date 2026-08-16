@@ -136,6 +136,22 @@ class HeroldTool(llm.Tool):
                 "error": str(err),
                 "confirmation": f"Das hat nicht geklappt: {err}",
             }
+        except Exception:
+            # A bug inside a tool must not abort the whole conversation —
+            # without this the pipeline dies with "intent-failed" and the
+            # user gets no answer at all.
+            _LOGGER.exception("Herold tool %s raised unexpectedly", self.name)
+            return {
+                "success": False,
+                "error": (
+                    "internal Herold error — details are in the Home "
+                    "Assistant log"
+                ),
+                "confirmation": (
+                    "Da ist in Herold intern etwas schiefgelaufen. Die "
+                    "Einzelheiten stehen im Home-Assistant-Log."
+                ),
+            }
 
     async def _run(self, **kwargs: Any) -> dict[str, Any]:
         raise NotImplementedError

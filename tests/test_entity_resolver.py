@@ -108,3 +108,30 @@ def test_off_works_across_domains() -> None:
 
 def test_blank_states_become_none() -> None:
     assert normalize_trigger("light.desk", "", "") == (None, None)
+
+
+class _ComputedName:
+    """Stand-in for Home Assistant's computed-name sentinel (not a str)."""
+
+
+async def test_non_string_friendly_name_does_not_crash(hass) -> None:
+    """HA 2026 can put a sentinel object in friendly_name, not a string."""
+    hass.states.async_set(
+        "climate.klimaanlage_arbeitszimmer",
+        "off",
+        {"friendly_name": _ComputedName()},
+    )
+    hass.states.async_set(
+        "light.kueche", "off", {"friendly_name": "Küche"}
+    )
+    # Falls back to matching the entity id instead of raising AttributeError
+    entity_id, name = resolve_entity(hass, "klimaanlage arbeitszimmer")
+    assert entity_id == "climate.klimaanlage_arbeitszimmer"
+    assert name == "climate.klimaanlage_arbeitszimmer"
+
+
+async def test_missing_friendly_name_falls_back_to_id(hass) -> None:
+    hass.states.async_set("switch.pumpe_keller", "off", {})
+    entity_id, name = resolve_entity(hass, "switch.pumpe_keller")
+    assert entity_id == "switch.pumpe_keller"
+    assert name == "switch.pumpe_keller"

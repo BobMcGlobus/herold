@@ -38,9 +38,25 @@ MAX_SUGGESTIONS = 6
 _UMLAUTS = (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss"))
 
 
-def _normalize(text: str) -> str:
+def _as_text(value: object) -> str | None:
+    """Return a usable string, or None for anything else.
+
+    State attributes are not guaranteed to hold strings: Home Assistant uses
+    sentinel objects for computed entity names, and integrations may put
+    arbitrary objects in there. Anything that is not plain text carries no
+    label we could match against.
+    """
+    if isinstance(value, str) and value.strip():
+        return value
+    return None
+
+
+def _normalize(text: object) -> str:
     """Lowercase, de-umlaut and reduce to space-separated words."""
-    lowered = text.lower()
+    plain = _as_text(text)
+    if plain is None:
+        return ""
+    lowered = plain.lower()
     for source, target in _UMLAUTS:
         lowered = lowered.replace(source, target)
     return re.sub(r"[^a-z0-9]+", " ", lowered).strip()
@@ -81,8 +97,12 @@ def resolve_entity(hass: HomeAssistant, reference: str) -> tuple[str, str]:
         ):
             continue
         entry = registry.async_get(state.entity_id)
-        name = state.attributes.get("friendly_name") or state.entity_id
-        aliases = list(entry.aliases) if entry and entry.aliases else []
+        name = _as_text(state.attributes.get("friendly_name")) or state.entity_id
+        aliases = [
+            alias
+            for alias in (entry.aliases if entry and entry.aliases else ())
+            if _as_text(alias)
+        ]
         exposed.append((state.entity_id, name, aliases))
 
     lowered = reference.lower()
