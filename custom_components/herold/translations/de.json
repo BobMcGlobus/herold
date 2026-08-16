@@ -55,7 +55,9 @@
         "description": "Optional: Conversation-Agents, die P0-Selbsterinnerungen (herold.remind_self) ausführen. Der Fallback-Agent übernimmt, wenn der primäre fehlschlägt, z.B. ein lokaler Ollama bei Offline.",
         "data": {
           "p0_agent_id": "P0-Conversation-Agent",
-          "p0_fallback_agent_id": "P0-Fallback-Agent"
+          "p0_fallback_agent_id": "P0-Fallback-Agent",
+          "enable_tool_confirmations": "Sprechbare Tool-Bestätigungen",
+          "enable_p0_verification": "Selbstkontrolle nach internen Anweisungen"
         }
       },
       "dnd": {
@@ -129,7 +131,9 @@
         "title": "LLM (interne Erinnerungen)",
         "data": {
           "p0_agent_id": "P0-Conversation-Agent",
-          "p0_fallback_agent_id": "P0-Fallback-Agent"
+          "p0_fallback_agent_id": "P0-Fallback-Agent",
+          "enable_tool_confirmations": "Sprechbare Tool-Bestätigungen",
+          "enable_p0_verification": "Selbstkontrolle nach internen Anweisungen"
         }
       },
       "dnd": {
@@ -262,6 +266,9 @@
       },
       "history": {
         "name": "Verlauf"
+      },
+      "last_internal": {
+        "name": "Letzte interne Anweisung"
       }
     },
     "todo": {
@@ -453,6 +460,10 @@
         "tag": {
           "name": "Tag",
           "description": "Optionales Tag für Deduplizierung (ab Phase 4 genutzt)."
+        },
+        "task_context": {
+          "name": "Aufgaben-Kontext",
+          "description": "Warum das geplant wurde — wird dem Agent beim Auslösen mitgegeben."
         }
       }
     },
@@ -467,6 +478,10 @@
         "instruction": {
           "name": "Instruktion",
           "description": "Selbstgerichteter Prompt für den Agent, z.B. 'Schalte das Wohnzimmerlicht aus.'"
+        },
+        "task_context": {
+          "name": "Aufgaben-Kontext",
+          "description": "Hintergrund aus dem ursprünglichen Gespräch — wird dem Agent beim Auslösen mitgegeben."
         }
       }
     },

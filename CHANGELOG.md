@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.7.0 — Verlässliche LLM-Rückmeldung
+
+- Der Internal-Channel wertet die Antwort von `conversation.process` jetzt
+  aus (`return_response`): Agent-Fehler und fehlgeschlagene Geräte-Ziele
+  werden erkannt statt verschluckt
+- Optionale **Selbstkontrolle**: nach einer P0-Anweisung prüft der Agent in
+  genau einem weiteren Zug, ob wirklich passiert ist was sollte, und bessert
+  einmalig nach (`ok` / `corrected` / `failed` / `unverified`) — Standard an,
+  abschaltbar in den Optionen
+- `sensor.*_letzte_interne_anweisung` mit Status, Agent-Antwort und
+  Fehlerdetail; Einträge im Karten-Logbuch
+- LLM-Tools liefern einen **sprechbaren Bestätigungssatz** (`confirmation`),
+  den der Agent laut Tool-Description vorlesen muss — man hört jetzt, ob
+  etwas wirklich gespeichert wurde
+- Neues LLM-Tool `herold_cancel`: „vergiss die Erinnerung" funktioniert
+- `task_context` bei `herold.schedule` / `herold.remind_self` und im
+  Remind-Tool: der Grund wird gespeichert und beim Auslösen mitgegeben
+- Events `herold_internal_triggered` (jetzt mit Agent-Antwort) und
+  `herold_internal_verified`
+
 ## 0.6.0 — Dashboard-Karte & Verlauf
 
 - Lovelace-Karte `custom:herold-card` (automatisch geladen, keine

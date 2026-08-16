@@ -183,6 +183,11 @@ schedule:
     tag:
       selector:
         text:
+    task_context:
+      example: "Jonas wollte den Kuchen um 18 Uhr aus dem Ofen holen."
+      selector:
+        text:
+          multiline: true
 
 remind_self:
   fields:
@@ -194,6 +199,11 @@ remind_self:
     instruction:
       required: true
       example: "Frage den User via herold.query: Wie ist der Kuchen geworden?"
+      selector:
+        text:
+          multiline: true
+    task_context:
+      example: "Jonas backt gerade einen Kuchen und wollte in 30 min Bescheid."
       selector:
         text:
           multiline: true

@@ -55,7 +55,9 @@
         "description": "Optional: conversation agents that execute P0 self-reminders (herold.remind_self). The fallback agent takes over when the primary one fails, e.g. a local Ollama while offline.",
         "data": {
           "p0_agent_id": "P0 conversation agent",
-          "p0_fallback_agent_id": "P0 fallback agent"
+          "p0_fallback_agent_id": "P0 fallback agent",
+          "enable_tool_confirmations": "Speakable tool confirmations",
+          "enable_p0_verification": "Self-check after internal instructions"
         }
       },
       "dnd": {
@@ -129,7 +131,9 @@
         "title": "LLM (internal reminders)",
         "data": {
           "p0_agent_id": "P0 conversation agent",
-          "p0_fallback_agent_id": "P0 fallback agent"
+          "p0_fallback_agent_id": "P0 fallback agent",
+          "enable_tool_confirmations": "Speakable tool confirmations",
+          "enable_p0_verification": "Self-check after internal instructions"
         }
       },
       "dnd": {
@@ -262,6 +266,9 @@
       },
       "history": {
         "name": "History"
+      },
+      "last_internal": {
+        "name": "Last internal instruction"
       }
     },
     "todo": {
@@ -453,6 +460,10 @@
         "tag": {
           "name": "Tag",
           "description": "Optional tag for deduplication (used from Phase 4)."
+        },
+        "task_context": {
+          "name": "Task context",
+          "description": "Why this was scheduled — handed to the agent when it fires."
         }
       }
     },
@@ -467,6 +478,10 @@
         "instruction": {
           "name": "Instruction",
           "description": "Self-directed prompt for the agent, e.g. 'Schalte das Wohnzimmerlicht aus.'"
+        },
+        "task_context": {
+          "name": "Task context",
+          "description": "Background from the original conversation — handed to the agent when the reminder fires."
         }
       }
     },

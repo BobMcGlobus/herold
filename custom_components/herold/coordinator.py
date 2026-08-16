@@ -44,17 +44,26 @@ from .const import (
     CONF_ROOMS,
     EVENT_DELIVERED,
     HISTORY_MAX_ENTRIES,
+    INTERNAL_RESULT_FAILED,
     P0_RATE_LIMIT_PER_HOUR,
     TODO_STATUS_DONE,
     TODO_STATUS_OPEN,
     signal_delivery,
     signal_dnd,
     signal_history,
+    signal_internal,
     signal_todo,
 )
 from .dispatcher import DispatchContext, select_channels, should_deliver
 from .llm_tools import HeroldAPI
-from .models import DeliveryResult, DNDState, Notification, Query, Room
+from .models import (
+    DeliveryResult,
+    DNDState,
+    InternalResult,
+    Notification,
+    Query,
+    Room,
+)
 from .query_manager import QueryManager
 from .rate_limiter import RateLimiter
 from .room_router import select_room
@@ -87,6 +96,7 @@ class HeroldCoordinator:
         self.rate_limiter = RateLimiter(self)
         self.last_result: DeliveryResult | None = None
         self.last_priority: int | None = None
+        self.last_internal: InternalResult | None = None
         self._p0_timestamps: list[float] = []
         self._dnd_session_unsubs: list[Callable[[], None]] = []
         self._dnd_restored_from_session = False
@@ -269,6 +279,21 @@ class HeroldCoordinator:
         """Record the most recent delivery for the debug sensor."""
         self.last_result = result
         self.last_priority = priority
+
+    @callback
+    def note_internal(self, result: InternalResult) -> None:
+        """Record the outcome of a P0 instruction."""
+        self.last_internal = result
+        self.add_history(
+            "internal_failed"
+            if result.status == INTERNAL_RESULT_FAILED
+            else "internal",
+            result.instruction,
+            status=result.status,
+            detail=result.detail,
+            verified=result.verified,
+        )
+        async_dispatcher_send(self.hass, signal_internal(self.entry.entry_id))
 
     @callback
     def add_history(self, kind: str, summary: str, **extra: Any) -> None:

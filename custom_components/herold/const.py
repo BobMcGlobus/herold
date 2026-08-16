@@ -57,6 +57,8 @@ CONF_ENABLE_OFFLINE_FALLBACK: Final = "enable_offline_fallback"
 CONF_ENABLE_OFFLINE_QUEUE: Final = "enable_offline_queue"
 CONF_P0_AGENT_ID: Final = "p0_agent_id"
 CONF_P0_FALLBACK_AGENT_ID: Final = "p0_fallback_agent_id"
+CONF_ENABLE_P0_VERIFICATION: Final = "enable_p0_verification"
+CONF_ENABLE_TOOL_CONFIRMATIONS: Final = "enable_tool_confirmations"
 CONF_TEMPLATES: Final = "templates"
 
 # Legacy config key (config entry version 1, migrated to flash_entities)
@@ -69,6 +71,8 @@ DEFAULT_PRIORITY_WEIGHT: Final = 0
 DEFAULT_CREATE_INTERNAL_SWITCH: Final = True
 DEFAULT_ENABLE_OFFLINE_FALLBACK: Final = False
 DEFAULT_ENABLE_OFFLINE_QUEUE: Final = True
+DEFAULT_ENABLE_P0_VERIFICATION: Final = True
+DEFAULT_ENABLE_TOOL_CONFIRMATIONS: Final = True
 DEFAULT_QUERY_TIMEOUT_MINUTES: Final = 60
 DEFAULT_VOICE_TIMEOUT_SECONDS: Final = 90
 
@@ -98,6 +102,18 @@ CARD_FILENAME: Final = "herold-card.js"
 # to the user.
 HEROLD_INTERNAL_PREFIX: Final = "[HEROLD_INTERNAL]"
 
+# Outcome of a P0 internal execution (state of the last-internal sensor)
+INTERNAL_RESULT_OK: Final = "ok"
+INTERNAL_RESULT_CORRECTED: Final = "corrected"
+INTERNAL_RESULT_FAILED: Final = "failed"
+INTERNAL_RESULT_UNVERIFIED: Final = "unverified"
+
+# Self-check tokens the agent is asked to answer with. Verification runs
+# exactly once per instruction — a correction never triggers another check.
+VERIFY_TOKEN_OK: Final = "OK"
+VERIFY_TOKEN_CORRECTED: Final = "KORRIGIERT"
+VERIFY_TOKEN_FAILED: Final = "FEHLER"
+
 # Channel names
 CHANNEL_VOICE: Final = "voice"
 CHANNEL_PUSH: Final = "push"
@@ -112,6 +128,7 @@ EVENT_ESCALATED: Final = "herold_escalated"
 EVENT_EXPIRED: Final = "herold_expired"
 EVENT_SCHEDULED: Final = "herold_scheduled"
 EVENT_INTERNAL_TRIGGERED: Final = "herold_internal_triggered"
+EVENT_INTERNAL_VERIFIED: Final = "herold_internal_verified"
 
 # Legacy compatibility with the original omnichannel script
 LEGACY_DEFAULT_CALLBACK: Final = "AI_CONFIRM"
@@ -150,6 +167,7 @@ ATTR_REASON: Final = "reason"
 ATTR_SCHEDULED_FOR: Final = "scheduled_for"
 ATTR_WHEN: Final = "when"
 ATTR_INSTRUCTION: Final = "instruction"
+ATTR_TASK_CONTEXT: Final = "task_context"
 ATTR_TEMPLATE: Final = "template"
 ATTR_TEMPLATE_VARS: Final = "template_vars"
 ATTR_IGNORE_RATE_LIMIT: Final = "ignore_rate_limit"
@@ -193,3 +211,8 @@ def signal_todo(entry_id: str) -> str:
 def signal_history(entry_id: str) -> str:
     """Dispatcher signal fired when a history entry was added."""
     return f"{DOMAIN}_{entry_id}_history"
+
+
+def signal_internal(entry_id: str) -> str:
+    """Dispatcher signal fired when a P0 instruction finished."""
+    return f"{DOMAIN}_{entry_id}_internal"

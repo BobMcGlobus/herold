@@ -176,6 +176,33 @@ class Query:
 
 
 @dataclass(kw_only=True)
+class InternalResult:
+    """Outcome of a P0 instruction executed by a conversation agent."""
+
+    notification_id: str
+    instruction: str
+    agent_id: str
+    status: str
+    speech: str | None = None
+    detail: str | None = None
+    verified: bool = False
+    timestamp: datetime = field(default_factory=dt_util.utcnow)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for sensor attributes."""
+        return {
+            "notification_id": self.notification_id,
+            "instruction": self.instruction,
+            "agent_id": self.agent_id,
+            "status": self.status,
+            "speech": self.speech,
+            "detail": self.detail,
+            "verified": self.verified,
+            "timestamp": self.timestamp.isoformat(),
+        }
+
+
+@dataclass(kw_only=True)
 class Schedule:
     """A deferred notification (herold.schedule / herold.remind_self)."""
 

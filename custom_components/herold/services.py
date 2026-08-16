@@ -29,6 +29,7 @@ from .const import (
     ATTR_SOURCE,
     ATTR_TAG,
     ATTR_TARGET_PLAYER,
+    ATTR_TASK_CONTEXT,
     ATTR_TEMPLATE,
     ATTR_TEMPLATE_VARS,
     ATTR_TIMEOUT_MINUTES,
@@ -152,6 +153,7 @@ SCHEDULE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_TARGET_PLAYER): cv.entity_id,
         vol.Optional(ATTR_TITLE): cv.string,
         vol.Optional(ATTR_TAG): cv.string,
+        vol.Optional(ATTR_TASK_CONTEXT): cv.string,
     }
 )
 
@@ -159,6 +161,7 @@ REMIND_SELF_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_WHEN): cv.string,
         vol.Required(ATTR_INSTRUCTION): cv.string,
+        vol.Optional(ATTR_TASK_CONTEXT): cv.string,
     }
 )
 
@@ -272,6 +275,8 @@ async def _async_handle_schedule(call: ServiceCall) -> None:
         "title": call.data.get(ATTR_TITLE),
         "tag": call.data.get(ATTR_TAG),
     }
+    if task_context := call.data.get(ATTR_TASK_CONTEXT):
+        payload["context"] = {"task_context": task_context}
     schedule = Schedule(scheduled_for=scheduled_for, payload=payload)
     _LOGGER.debug("Service schedule: %s at %s", schedule.id, scheduled_for)
     await coordinator.scheduler.async_add(schedule)
@@ -281,13 +286,13 @@ async def _async_handle_remind_self(call: ServiceCall) -> None:
     """Handle herold.remind_self (P0 convenience wrapper for schedule)."""
     coordinator = _get_coordinator(call.hass)
     scheduled_for = parse_when(call.data[ATTR_WHEN])
-    schedule = Schedule(
-        scheduled_for=scheduled_for,
-        payload={
-            "message": call.data[ATTR_INSTRUCTION],
-            "priority": PRIORITY_INTERNAL,
-        },
-    )
+    payload: dict = {
+        "message": call.data[ATTR_INSTRUCTION],
+        "priority": PRIORITY_INTERNAL,
+    }
+    if task_context := call.data.get(ATTR_TASK_CONTEXT):
+        payload["context"] = {"task_context": task_context}
+    schedule = Schedule(scheduled_for=scheduled_for, payload=payload)
     _LOGGER.debug("Service remind_self: %s at %s", schedule.id, scheduled_for)
     await coordinator.scheduler.async_add(schedule)
 

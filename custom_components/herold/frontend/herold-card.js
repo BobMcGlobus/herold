@@ -31,6 +31,15 @@
     cancelled: { icon: "✖️", label: "Abgebrochen" },
     escalated: { icon: "⚠️", label: "Eskaliert" },
     scheduled: { icon: "🕐", label: "Geplant" },
+    internal: { icon: "🤖", label: "Intern ausgeführt" },
+    internal_failed: { icon: "🤖", label: "Intern fehlgeschlagen" },
+  };
+
+  const STATUS_LABEL = {
+    ok: "geprüft ok",
+    corrected: "nachgebessert",
+    failed: "fehlgeschlagen",
+    unverified: "ungeprüft",
   };
 
   const esc = (value) =>
@@ -380,6 +389,8 @@
           if (entry.room) details.push(entry.room);
           if (entry.answer) details.push(`Antwort: ${entry.answer}`);
           if (entry.source) details.push(`via ${entry.source}`);
+          if (entry.status) details.push(STATUS_LABEL[entry.status] || entry.status);
+          if (entry.detail) details.push(entry.detail);
           if (entry.reason) details.push(entry.reason);
           if (entry.at) details.push(`für ${fmtTime(entry.at)}`);
           if (entry.to_priority !== undefined) {

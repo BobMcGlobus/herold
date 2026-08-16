@@ -12,6 +12,7 @@ from .const import (
     DOMAIN,
     signal_delivery,
     signal_history,
+    signal_internal,
     signal_query,
     signal_schedule,
 )
@@ -42,6 +43,7 @@ async def async_setup_entry(
             HeroldScheduledCountSensor(coordinator),
             HeroldNextScheduleSensor(coordinator),
             HeroldHistorySensor(coordinator),
+            HeroldLastInternalSensor(coordinator),
         ]
     )
 
@@ -261,3 +263,27 @@ class HeroldHistorySensor(HeroldSignalSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Expose the full ring buffer."""
         return {"entries": self.coordinator.store.history}
+
+
+class HeroldLastInternalSensor(HeroldSignalSensor):
+    """Outcome of the last P0 instruction (ok / corrected / failed)."""
+
+    _attr_translation_key = "last_internal"
+    _attr_icon = "mdi:robot-outline"
+    _signal = staticmethod(signal_internal)
+
+    def __init__(self, coordinator: HeroldCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_last_internal"
+
+    @property
+    def native_value(self) -> str:
+        """Return the status of the most recent internal execution."""
+        result = self.coordinator.last_internal
+        return result.status if result else "none"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose instruction, agent answer and failure detail."""
+        result = self.coordinator.last_internal
+        return result.to_dict() if result else {}
