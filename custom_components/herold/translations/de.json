@@ -269,6 +269,9 @@
       },
       "last_internal": {
         "name": "Letzte interne Anweisung"
+      },
+      "watch_count": {
+        "name": "Aktive Beobachtungen"
       }
     },
     "todo": {
@@ -482,6 +485,52 @@
         "task_context": {
           "name": "Aufgaben-Kontext",
           "description": "Hintergrund aus dem ursprünglichen Gespräch — wird dem Agent beim Auslösen mitgegeben."
+        }
+      }
+    },
+    "watch": {
+      "name": "Auf Zustandsänderung warten",
+      "description": "Legt eine einmalige Erinnerung an, die beim nächsten Mal auslöst, wenn eine Entität den angegebenen Zustand erreicht — z.B. beim nächsten Öffnen der Haustür.",
+      "fields": {
+        "entity_id": {
+          "name": "Entität",
+          "description": "Die zu beobachtende Entität."
+        },
+        "message": {
+          "name": "Nachricht",
+          "description": "Was durchgesagt wird, wenn die Bedingung eintritt."
+        },
+        "to_state": {
+          "name": "Zielzustand",
+          "description": "Auslösen, wenn die Entität in diesen Zustand wechselt, z.B. 'on'."
+        },
+        "from_state": {
+          "name": "Ausgangszustand",
+          "description": "Nur auslösen, wenn der Wechsel aus diesem Zustand kommt."
+        },
+        "above": {
+          "name": "Über",
+          "description": "Auslösen, wenn ein numerischer Sensor über diesen Wert steigt."
+        },
+        "below": {
+          "name": "Unter",
+          "description": "Auslösen, wenn ein numerischer Sensor unter diesen Wert fällt."
+        },
+        "priority": {
+          "name": "Priorität",
+          "description": "0 = intern, 1 = Todo, 2 = normal, 3 = wichtig, 4 = Alarm."
+        },
+        "ttl_hours": {
+          "name": "Verfällt nach (Stunden)",
+          "description": "Beobachtung verwerfen, wenn sie nie auslöst. 0 = verfällt nie."
+        },
+        "title": {
+          "name": "Titel",
+          "description": "Optionaler Titel der Push-Benachrichtigung."
+        },
+        "task_context": {
+          "name": "Aufgaben-Kontext",
+          "description": "Warum das angelegt wurde — wird bei Priorität 0 dem Agent mitgegeben."
         }
       }
     },

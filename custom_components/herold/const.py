@@ -87,6 +87,11 @@ LAST_KNOWN_ROOM_TTL_MINUTES: Final = 15
 # Scheduler: missed deliveries within this window still fire after a reboot
 SCHEDULE_GRACE_MINUTES: Final = 5
 
+# Watches (state-triggered reminders) expire after this many hours by
+# default so forgotten one-shots do not fire months later.
+DEFAULT_WATCH_TTL_HOURS: Final = 72
+MAX_WATCH_TTL_HOURS: Final = 8760
+
 # P0 anti-runaway: max internal triggers per rolling hour
 P0_RATE_LIMIT_PER_HOUR: Final = 20
 
@@ -127,6 +132,8 @@ EVENT_ANSWERED: Final = "herold_answered"
 EVENT_ESCALATED: Final = "herold_escalated"
 EVENT_EXPIRED: Final = "herold_expired"
 EVENT_SCHEDULED: Final = "herold_scheduled"
+EVENT_WATCH_ARMED: Final = "herold_watch_armed"
+EVENT_WATCH_TRIGGERED: Final = "herold_watch_triggered"
 EVENT_INTERNAL_TRIGGERED: Final = "herold_internal_triggered"
 EVENT_INTERNAL_VERIFIED: Final = "herold_internal_verified"
 
@@ -146,6 +153,7 @@ SERVICE_SCHEDULE: Final = "schedule"
 SERVICE_REMIND_SELF: Final = "remind_self"
 SERVICE_DND_ON: Final = "dnd_on"
 SERVICE_DND_OFF: Final = "dnd_off"
+SERVICE_WATCH: Final = "watch"
 
 ATTR_MESSAGE: Final = "message"
 ATTR_PRIORITY: Final = "priority"
@@ -167,6 +175,12 @@ ATTR_REASON: Final = "reason"
 ATTR_SCHEDULED_FOR: Final = "scheduled_for"
 ATTR_WHEN: Final = "when"
 ATTR_INSTRUCTION: Final = "instruction"
+ATTR_ENTITY_ID: Final = "entity_id"
+ATTR_TO_STATE: Final = "to_state"
+ATTR_FROM_STATE: Final = "from_state"
+ATTR_ABOVE: Final = "above"
+ATTR_BELOW: Final = "below"
+ATTR_TTL_HOURS: Final = "ttl_hours"
 ATTR_TASK_CONTEXT: Final = "task_context"
 ATTR_TEMPLATE: Final = "template"
 ATTR_TEMPLATE_VARS: Final = "template_vars"
@@ -216,3 +230,8 @@ def signal_history(entry_id: str) -> str:
 def signal_internal(entry_id: str) -> str:
     """Dispatcher signal fired when a P0 instruction finished."""
     return f"{DOMAIN}_{entry_id}_internal"
+
+
+def signal_watch(entry_id: str) -> str:
+    """Dispatcher signal fired when the watch list changed."""
+    return f"{DOMAIN}_{entry_id}_watch"

@@ -19,12 +19,16 @@ import voluptuous as vol
 from .const import (
     CONF_ENABLE_TOOL_CONFIRMATIONS,
     DEFAULT_ENABLE_TOOL_CONFIRMATIONS,
+    DEFAULT_PRIORITY,
+    DEFAULT_WATCH_TTL_HOURS,
     DOMAIN,
+    MAX_WATCH_TTL_HOURS,
     PRIORITY_INTERNAL,
     TODO_STATUS_OPEN,
 )
-from .models import Schedule
+from .models import Schedule, Watch
 from .scheduler import parse_when
+from .watcher import ttl_to_expiry
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -95,6 +99,7 @@ class HeroldAPI(llm.API):
                 AcknowledgeTool(self.coordinator),
                 AnswerQueryTool(self.coordinator),
                 RemindSelfTool(self.coordinator),
+                RemindWhenTool(self.coordinator),
                 CancelTool(self.coordinator),
             ],
         )
@@ -145,7 +150,9 @@ class ListPendingTool(HeroldTool):
         "the user asks things like 'was ist neu', 'gibt es was für mich', "
         "'hab ich was verpasst', 'was steht an', or proactively before "
         "ending a conversation. Returns todos {id, summary}, queries "
-        "{id, question, mode, choices} and scheduled {id, at, message}."
+        "{id, question, mode, choices}, scheduled {id, when, message} and "
+        "watches {id, condition, message} — the latter are reminders waiting "
+        "for a device state change."
     )
     parameters = vol.Schema({})
 
@@ -174,7 +181,20 @@ class ListPendingTool(HeroldTool):
             }
             for schedule in coordinator.scheduler.pending
         ]
-        return {"todos": todos, "queries": queries, "scheduled": scheduled}
+        watches = [
+            {
+                "id": watch.id,
+                "condition": watch.describe(),
+                "message": watch.payload.get("message"),
+            }
+            for watch in coordinator.watcher.active
+        ]
+        return {
+            "todos": todos,
+            "queries": queries,
+            "scheduled": scheduled,
+            "watches": watches,
+        }
 
 
 class AcknowledgeTool(HeroldTool):
@@ -276,17 +296,86 @@ class RemindSelfTool(HeroldTool):
         )
 
 
+class RemindWhenTool(HeroldTool):
+    """Arm a one-shot reminder tied to a state change."""
+
+    name = "herold_remind_when"
+    description = (
+        "Arm a one-shot reminder that fires the next time a device or sensor "
+        "changes state — the counterpart to herold_remind_self for things "
+        "without a fixed time. Use it for 'wenn ich das nächste Mal die "
+        "Haustür öffne', 'sobald die Waschmaschine fertig ist', 'wenn ich "
+        "nach Hause komme', 'wenn es unter 5 Grad wird'. "
+        "\n\nParameters: entity_id (the entity to observe — pick it from the "
+        "exposed entities), message (what to announce when it happens), "
+        "optionally to_state (e.g. 'on', 'open', 'home'), above/below for "
+        "numeric sensors, priority (default 2) and ttl_hours (default 72, "
+        "0 = never expires). "
+        "\n\nThe result contains the resolved friendly name in "
+        "'confirmation' — read it back so the user can catch a wrong entity. "
+        "The watch fires once and then removes itself."
+    )
+    parameters = vol.Schema(
+        {
+            vol.Required("entity_id"): str,
+            vol.Required("message"): str,
+            vol.Optional("to_state"): str,
+            vol.Optional("above"): vol.Coerce(float),
+            vol.Optional("below"): vol.Coerce(float),
+            vol.Optional("priority"): vol.All(
+                vol.Coerce(int), vol.Range(min=1, max=4)
+            ),
+            vol.Optional("ttl_hours"): vol.All(
+                vol.Coerce(int), vol.Range(min=0, max=MAX_WATCH_TTL_HOURS)
+            ),
+        }
+    )
+
+    async def _run(self, **kwargs: Any) -> dict[str, Any]:
+        coordinator = self.coordinator
+        entity_id = kwargs["entity_id"]
+        state = coordinator.hass.states.get(entity_id)
+        if state is None:
+            raise HomeAssistantError(
+                f"Unknown entity {entity_id} — pick one of the exposed entities"
+            )
+        watch = Watch(
+            entity_id=entity_id,
+            payload={
+                "message": kwargs["message"],
+                "priority": kwargs.get("priority", DEFAULT_PRIORITY),
+            },
+            to_state=kwargs.get("to_state"),
+            above=kwargs.get("above"),
+            below=kwargs.get("below"),
+            expires_at=ttl_to_expiry(
+                kwargs.get("ttl_hours", DEFAULT_WATCH_TTL_HOURS)
+            ),
+            friendly_name=state.attributes.get("friendly_name"),
+        )
+        await coordinator.watcher.async_add(watch)
+        return self._confirm(
+            {
+                "success": True,
+                "id": watch.id,
+                "entity_id": entity_id,
+                "condition": watch.describe(),
+            },
+            f"Ist notiert — ich melde mich, {watch.describe()}.",
+        )
+
+
 class CancelTool(HeroldTool):
     """Cancel a scheduled reminder or a pending query."""
 
     name = "herold_cancel"
     description = (
-        "Cancel a scheduled reminder or a pending query by its id. Use when "
-        "the user revokes something they asked for earlier: 'vergiss die "
-        "Erinnerung', 'brauche ich doch nicht mehr', 'streich den Termin'. "
-        "Get the id from herold_list_pending first — if several entries could "
-        "be meant, ask the user which one. Read the returned 'confirmation' "
-        "back so the user knows it is really gone."
+        "Cancel a scheduled reminder, a state watch or a pending query by its "
+        "id. Use when the user revokes something they asked for earlier: "
+        "'vergiss die Erinnerung', 'brauche ich doch nicht mehr', 'streich "
+        "den Termin'. Get the id from herold_list_pending first — if several "
+        "entries could be meant, ask the user which one. Read the returned "
+        "'confirmation' back so the user knows it is really gone."
     )
     parameters = vol.Schema({vol.Required("id"): str})
 
@@ -296,9 +385,11 @@ class CancelTool(HeroldTool):
         query = coordinator.query_manager.queries.get(item_id)
         if query is not None and query.is_pending:
             await coordinator.query_manager.async_cancel(item_id, "cancelled by LLM")
-        elif not await coordinator.scheduler.async_cancel(item_id):
+        elif not await coordinator.scheduler.async_cancel(
+            item_id
+        ) and not await coordinator.watcher.async_cancel(item_id):
             raise HomeAssistantError(
-                f"No pending reminder or query with id {item_id}"
+                f"No pending reminder, watch or query with id {item_id}"
             )
         return self._confirm(
             {"success": True, "id": item_id}, "Erledigt, das ist gestrichen."

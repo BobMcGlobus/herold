@@ -69,6 +69,7 @@ from .rate_limiter import RateLimiter
 from .room_router import select_room
 from .scheduler import HeroldScheduler
 from .store import HeroldStore
+from .watcher import HeroldWatcher
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -93,6 +94,7 @@ class HeroldCoordinator:
         self.store = HeroldStore(hass, entry.entry_id)
         self.query_manager = QueryManager(self)
         self.scheduler = HeroldScheduler(self)
+        self.watcher = HeroldWatcher(self)
         self.rate_limiter = RateLimiter(self)
         self.last_result: DeliveryResult | None = None
         self.last_priority: int | None = None
@@ -146,6 +148,7 @@ class HeroldCoordinator:
 
         await self.query_manager.async_setup()
         await self.scheduler.async_setup()
+        await self.watcher.async_setup()
         self._async_restore_dnd_session()
 
         self._unsubs.append(
@@ -154,6 +157,7 @@ class HeroldCoordinator:
 
     async def async_shutdown(self) -> None:
         """Detach listeners and flush the store on unload."""
+        await self.watcher.async_shutdown()
         await self.scheduler.async_shutdown()
         await self.query_manager.async_shutdown()
         self.rate_limiter.shutdown()

@@ -233,6 +233,102 @@ class Schedule:
 
 
 @dataclass(kw_only=True)
+class Watch:
+    """A notification waiting for a state change instead of a point in time."""
+
+    entity_id: str
+    payload: dict[str, Any]
+    id: str = field(default_factory=_new_id)
+    to_state: str | None = None
+    from_state: str | None = None
+    above: float | None = None
+    below: float | None = None
+    once: bool = True
+    created_at: datetime = field(default_factory=dt_util.utcnow)
+    expires_at: datetime | None = None
+    friendly_name: str | None = None
+
+    @property
+    def is_numeric(self) -> bool:
+        """Return True if this watch compares numeric thresholds."""
+        return self.above is not None or self.below is not None
+
+    def matches(self, old_state: str | None, new_state: str) -> bool:
+        """Return True if a state transition satisfies this watch."""
+        if self.from_state is not None and old_state != self.from_state:
+            return False
+        if self.is_numeric:
+            try:
+                value = float(new_state)
+                previous = float(old_state) if old_state is not None else None
+            except (TypeError, ValueError):
+                return False
+            # Only fire on the crossing itself, not on every update while
+            # the value stays past the threshold.
+            crossed_up = self.above is None or (
+                value > self.above
+                and (previous is None or previous <= self.above)
+            )
+            crossed_down = self.below is None or (
+                value < self.below
+                and (previous is None or previous >= self.below)
+            )
+            return crossed_up and crossed_down
+        if self.to_state is not None:
+            # Only fire on an actual transition into the target state.
+            return new_state == self.to_state and old_state != self.to_state
+        return old_state != new_state
+
+    def describe(self) -> str:
+        """Return a German phrase describing the trigger condition."""
+        name = self.friendly_name or self.entity_id
+        if self.above is not None and self.below is not None:
+            return f"wenn {name} zwischen {self.below} und {self.above} liegt"
+        if self.above is not None:
+            return f"wenn {name} über {self.above} steigt"
+        if self.below is not None:
+            return f"wenn {name} unter {self.below} fällt"
+        if self.to_state is not None:
+            return f"wenn {name} auf «{self.to_state}» wechselt"
+        return f"wenn sich {name} ändert"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for the persistence store."""
+        return {
+            "id": self.id,
+            "entity_id": self.entity_id,
+            "payload": self.payload,
+            "to_state": self.to_state,
+            "from_state": self.from_state,
+            "above": self.above,
+            "below": self.below,
+            "once": self.once,
+            "created_at": self.created_at.isoformat(),
+            "expires_at": (
+                self.expires_at.isoformat() if self.expires_at else None
+            ),
+            "friendly_name": self.friendly_name,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Watch:
+        """Deserialize from a persistence store payload."""
+        return cls(
+            id=data["id"],
+            entity_id=data["entity_id"],
+            payload=data.get("payload") or {},
+            to_state=data.get("to_state"),
+            from_state=data.get("from_state"),
+            above=data.get("above"),
+            below=data.get("below"),
+            once=data.get("once", True),
+            created_at=_parse_datetime(data.get("created_at")) or dt_util.utcnow(),
+            expires_at=_parse_datetime(data.get("expires_at")),
+            friendly_name=data.get("friendly_name"),
+        )
+
+
+@dataclass(kw_only=True)
 class Room:
     """A configured room with occupancy detection and voice outputs."""
 

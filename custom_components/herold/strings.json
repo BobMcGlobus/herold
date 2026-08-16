@@ -269,6 +269,9 @@
       },
       "last_internal": {
         "name": "Last internal instruction"
+      },
+      "watch_count": {
+        "name": "Armed watches"
       }
     },
     "todo": {
@@ -482,6 +485,52 @@
         "task_context": {
           "name": "Task context",
           "description": "Background from the original conversation — handed to the agent when the reminder fires."
+        }
+      }
+    },
+    "watch": {
+      "name": "Watch for a state change",
+      "description": "Arms a one-shot reminder that fires the next time an entity reaches the given state — e.g. the next time the front door opens.",
+      "fields": {
+        "entity_id": {
+          "name": "Entity",
+          "description": "The entity to observe."
+        },
+        "message": {
+          "name": "Message",
+          "description": "What to announce when the condition is met."
+        },
+        "to_state": {
+          "name": "To state",
+          "description": "Fire when the entity changes into this state, e.g. 'on'."
+        },
+        "from_state": {
+          "name": "From state",
+          "description": "Only fire when coming from this state."
+        },
+        "above": {
+          "name": "Above",
+          "description": "Fire when a numeric sensor rises above this value."
+        },
+        "below": {
+          "name": "Below",
+          "description": "Fire when a numeric sensor falls below this value."
+        },
+        "priority": {
+          "name": "Priority",
+          "description": "0 = internal, 1 = todo, 2 = normal, 3 = important, 4 = alarm."
+        },
+        "ttl_hours": {
+          "name": "Expires after (hours)",
+          "description": "Drop the watch if it never fires. 0 = never expires."
+        },
+        "title": {
+          "name": "Title",
+          "description": "Optional push notification title."
+        },
+        "task_context": {
+          "name": "Task context",
+          "description": "Why this was armed — handed to the agent for priority 0."
         }
       }
     },

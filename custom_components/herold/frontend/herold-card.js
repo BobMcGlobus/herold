@@ -33,6 +33,7 @@
     scheduled: { icon: "🕐", label: "Geplant" },
     internal: { icon: "🤖", label: "Intern ausgeführt" },
     internal_failed: { icon: "🤖", label: "Intern fehlgeschlagen" },
+    watch_armed: { icon: "👁", label: "Beobachtung gesetzt" },
   };
 
   const STATUS_LABEL = {
@@ -107,6 +108,7 @@
         ids.pending && hass.states[ids.pending]?.last_updated,
         ids.scheduled && hass.states[ids.scheduled]?.last_updated,
         ids.history && hass.states[ids.history]?.last_updated,
+        ids.watches && hass.states[ids.watches]?.last_updated,
         this._todoFingerprint,
         this._todoItems.length,
       ].join("|");
@@ -132,6 +134,7 @@
         pending: cfg.pending_entity || find("sensor.", "queries"),
         scheduled: cfg.scheduled_entity || find("sensor.", "schedules"),
         history: cfg.history_entity || find("sensor.", "entries"),
+        watches: cfg.watches_entity || find("sensor.", "watches"),
       };
       this._idsIncomplete = Object.values(this._ids).some((id) => !id);
       return this._ids;
@@ -192,7 +195,12 @@
       const title = esc(this._config.title || "Herold");
       const tabs = [
         ["inbox", `📥 Inbox${this._badge(this._inboxCount(ids))}`],
-        ["scheduled", `🕐 Geplant${this._badge(this._scheduledItems(ids).length)}`],
+        [
+          "scheduled",
+          `🕐 Geplant${this._badge(
+            this._scheduledItems(ids).length + this._watchItems(ids).length
+          )}`,
+        ],
         ["history", "📜 Logbuch"],
       ]
         .map(
@@ -278,6 +286,12 @@
       return (stateObj && stateObj.attributes.schedules) || [];
     }
 
+    _watchItems(ids) {
+      if (!ids.watches) return [];
+      const stateObj = this._hass.states[ids.watches];
+      return (stateObj && stateObj.attributes.watches) || [];
+    }
+
     _renderInbox(ids) {
       const queries = this._pendingQueries(ids);
       const open = this._todoItems.filter((i) => i.status === "needs_action");
@@ -351,25 +365,50 @@
 
     _renderScheduled(ids) {
       const schedules = this._scheduledItems(ids);
-      if (!schedules.length) {
+      const watches = this._watchItems(ids);
+      if (!schedules.length && !watches.length) {
         return '<div class="empty">Keine geplanten Nachrichten.</div>';
       }
-      return schedules
-        .map(
-          (schedule) => `
-          <div class="row">
-            <span class="icon">🕐</span>
-            <div class="main">
-              <div class="text">${esc(schedule.message)}</div>
-              <div class="sub">${fmtTime(schedule.scheduled_for)} ·
-                ${fmtRelative(schedule.scheduled_for)}</div>
-            </div>
-            ${prioBadge(schedule.priority)}
-            <button class="btn danger" data-action="cancel"
-              data-id="${esc(schedule.id)}">✕</button>
-          </div>`
-        )
-        .join("");
+      const parts = [];
+
+      if (schedules.length) {
+        parts.push('<div class="section">Nach Zeit</div>');
+        for (const schedule of schedules) {
+          parts.push(`
+            <div class="row">
+              <span class="icon">🕐</span>
+              <div class="main">
+                <div class="text">${esc(schedule.message)}</div>
+                <div class="sub">${fmtTime(schedule.scheduled_for)} ·
+                  ${fmtRelative(schedule.scheduled_for)}</div>
+              </div>
+              ${prioBadge(schedule.priority)}
+              <button class="btn danger" data-action="cancel"
+                data-id="${esc(schedule.id)}">✕</button>
+            </div>`);
+        }
+      }
+
+      if (watches.length) {
+        parts.push('<div class="section">Nach Ereignis</div>');
+        for (const watch of watches) {
+          const expiry = watch.expires_at
+            ? ` · verfällt ${fmtRelative(watch.expires_at)}`
+            : "";
+          parts.push(`
+            <div class="row">
+              <span class="icon">👁</span>
+              <div class="main">
+                <div class="text">${esc(watch.message)}</div>
+                <div class="sub">${esc(watch.condition)}${expiry}</div>
+              </div>
+              ${prioBadge(watch.priority)}
+              <button class="btn danger" data-action="cancel"
+                data-id="${esc(watch.id)}">✕</button>
+            </div>`);
+        }
+      }
+      return parts.join("");
     }
 
     _renderHistory(ids) {

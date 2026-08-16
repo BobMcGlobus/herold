@@ -15,6 +15,7 @@ from .const import (
     signal_internal,
     signal_query,
     signal_schedule,
+    signal_watch,
 )
 from .entity import HeroldEntity
 
@@ -44,6 +45,7 @@ async def async_setup_entry(
             HeroldNextScheduleSensor(coordinator),
             HeroldHistorySensor(coordinator),
             HeroldLastInternalSensor(coordinator),
+            HeroldWatchCountSensor(coordinator),
         ]
     )
 
@@ -287,3 +289,40 @@ class HeroldLastInternalSensor(HeroldSignalSensor):
         """Expose instruction, agent answer and failure detail."""
         result = self.coordinator.last_internal
         return result.to_dict() if result else {}
+
+
+class HeroldWatchCountSensor(HeroldSignalSensor):
+    """Number of armed state-triggered reminders."""
+
+    _attr_translation_key = "watch_count"
+    _attr_icon = "mdi:motion-sensor"
+    _attr_native_unit_of_measurement = "watches"
+    _signal = staticmethod(signal_watch)
+
+    def __init__(self, coordinator: HeroldCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_watch_count"
+
+    @property
+    def native_value(self) -> int:
+        """Return the number of armed watches."""
+        return len(self.coordinator.watcher.active)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """List the armed watches with their trigger condition."""
+        return {
+            "watches": [
+                {
+                    "id": watch.id,
+                    "entity_id": watch.entity_id,
+                    "condition": watch.describe(),
+                    "message": watch.payload.get("message"),
+                    "priority": watch.payload.get("priority"),
+                    "expires_at": (
+                        watch.expires_at.isoformat() if watch.expires_at else None
+                    ),
+                }
+                for watch in self.coordinator.watcher.active
+            ]
+        }

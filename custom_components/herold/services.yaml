@@ -208,6 +208,64 @@ remind_self:
         text:
           multiline: true
 
+watch:
+  fields:
+    entity_id:
+      required: true
+      example: binary_sensor.haustuer_kontakt
+      selector:
+        entity:
+    message:
+      required: true
+      example: Denk an das Paket für den Postboten!
+      selector:
+        text:
+          multiline: true
+    to_state:
+      example: "on"
+      selector:
+        text:
+    from_state:
+      example: "off"
+      selector:
+        text:
+    above:
+      selector:
+        number:
+          min: -100
+          max: 1000
+          step: 0.1
+          mode: box
+    below:
+      selector:
+        number:
+          min: -100
+          max: 1000
+          step: 0.1
+          mode: box
+    priority:
+      required: true
+      default: 2
+      selector:
+        number:
+          min: 0
+          max: 4
+          mode: slider
+    ttl_hours:
+      default: 72
+      selector:
+        number:
+          min: 0
+          max: 8760
+          unit_of_measurement: h
+    title:
+      selector:
+        text:
+    task_context:
+      selector:
+        text:
+          multiline: true
+
 dnd_on:
   fields:
     until:

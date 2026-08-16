@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.0 — Ereignis-Trigger
+
+- Neuer Service `herold.watch`: Erinnerungen, die auf eine
+  Zustandsänderung warten statt auf eine Uhrzeit („wenn ich das nächste Mal
+  die Haustür öffne") — inklusive numerischer Schwellen (`above`/`below`),
+  die nur beim Überschreiten auslösen
+- Einmalig per Default, mit TTL (Standard 72 h) gegen vergessene Trigger,
+  persistent über Neustarts
+- Neues LLM-Tool `herold_remind_when`; gibt den aufgelösten Klarnamen der
+  Entity zurück, damit eine falsche Zuordnung sofort auffällt
+- `sensor.*_aktive_beobachtungen`, Events `herold_watch_armed` und
+  `herold_watch_triggered` für eigene Automationen
+- `herold.cancel` und `herold_cancel` kümmern sich auch um Beobachtungen
+- Karte: Tab „Geplant" trennt jetzt „Nach Zeit" und „Nach Ereignis"
+
 ## 0.7.0 — Verlässliche LLM-Rückmeldung
 
 - Der Internal-Channel wertet die Antwort von `conversation.process` jetzt

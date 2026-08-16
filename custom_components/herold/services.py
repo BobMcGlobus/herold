@@ -11,11 +11,15 @@ from homeassistant.helpers import config_validation as cv
 import voluptuous as vol
 
 from .const import (
+    ATTR_ABOVE,
     ATTR_ANSWER,
+    ATTR_BELOW,
     ATTR_CALLBACK_EVENT,
     ATTR_CHOICES,
     ATTR_DEFAULT_ANSWER,
+    ATTR_ENTITY_ID,
     ATTR_ESCALATION,
+    ATTR_FROM_STATE,
     ATTR_ID,
     ATTR_IGNORE_RATE_LIMIT,
     ATTR_INSTRUCTION,
@@ -34,6 +38,8 @@ from .const import (
     ATTR_TEMPLATE_VARS,
     ATTR_TIMEOUT_MINUTES,
     ATTR_TITLE,
+    ATTR_TO_STATE,
+    ATTR_TTL_HOURS,
     ATTR_TTL_MINUTES,
     ATTR_UNTIL,
     ATTR_UNTIL_HOME,
@@ -42,8 +48,10 @@ from .const import (
     CONF_RECIPIENT,
     DEFAULT_PRIORITY,
     DEFAULT_QUERY_TIMEOUT_MINUTES,
+    DEFAULT_WATCH_TTL_HOURS,
     DOMAIN,
     LEGACY_DEFAULT_CALLBACK,
+    MAX_WATCH_TTL_HOURS,
     PRIORITY_INTERNAL,
     QUERY_MODE_CHOICE,
     QUERY_MODES,
@@ -55,10 +63,12 @@ from .const import (
     SERVICE_REMIND_SELF,
     SERVICE_SCHEDULE,
     SERVICE_SEND,
+    SERVICE_WATCH,
 )
-from .models import Notification, Query, Schedule
+from .models import Notification, Query, Schedule, Watch
 from .scheduler import parse_when
 from .templates import resolve_template
+from .watcher import ttl_to_expiry
 
 if TYPE_CHECKING:
     from .coordinator import HeroldCoordinator
@@ -117,6 +127,23 @@ QUERY_SCHEMA = vol.Schema(
         ),
         vol.Optional(ATTR_RECIPIENT): cv.entity_id,
         vol.Optional(ATTR_TARGET_PLAYER): cv.entity_id,
+    }
+)
+
+WATCH_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        vol.Required(ATTR_MESSAGE): cv.string,
+        vol.Optional(ATTR_TO_STATE): cv.string,
+        vol.Optional(ATTR_FROM_STATE): cv.string,
+        vol.Optional(ATTR_ABOVE): vol.Coerce(float),
+        vol.Optional(ATTR_BELOW): vol.Coerce(float),
+        vol.Optional(ATTR_PRIORITY, default=DEFAULT_PRIORITY): _PRIORITY,
+        vol.Optional(
+            ATTR_TTL_HOURS, default=DEFAULT_WATCH_TTL_HOURS
+        ): vol.All(vol.Coerce(int), vol.Range(min=0, max=MAX_WATCH_TTL_HOURS)),
+        vol.Optional(ATTR_TITLE): cv.string,
+        vol.Optional(ATTR_TASK_CONTEXT): cv.string,
     }
 )
 
@@ -258,7 +285,11 @@ async def _async_handle_cancel(call: ServiceCall) -> None:
         return
     if await coordinator.scheduler.async_cancel(item_id):
         return
-    raise HomeAssistantError(f"No pending query or schedule with id {item_id}")
+    if await coordinator.watcher.async_cancel(item_id):
+        return
+    raise HomeAssistantError(
+        f"No pending query, schedule or watch with id {item_id}"
+    )
 
 
 async def _async_handle_schedule(call: ServiceCall) -> None:
@@ -297,6 +328,29 @@ async def _async_handle_remind_self(call: ServiceCall) -> None:
     await coordinator.scheduler.async_add(schedule)
 
 
+async def _async_handle_watch(call: ServiceCall) -> None:
+    """Handle herold.watch (state-triggered reminder)."""
+    coordinator = _get_coordinator(call.hass)
+    payload: dict = {
+        "message": call.data[ATTR_MESSAGE],
+        "priority": call.data[ATTR_PRIORITY],
+        "title": call.data.get(ATTR_TITLE),
+    }
+    if task_context := call.data.get(ATTR_TASK_CONTEXT):
+        payload["context"] = {"task_context": task_context}
+    watch = Watch(
+        entity_id=call.data[ATTR_ENTITY_ID],
+        payload=payload,
+        to_state=call.data.get(ATTR_TO_STATE),
+        from_state=call.data.get(ATTR_FROM_STATE),
+        above=call.data.get(ATTR_ABOVE),
+        below=call.data.get(ATTR_BELOW),
+        expires_at=ttl_to_expiry(call.data[ATTR_TTL_HOURS]),
+    )
+    _LOGGER.debug("Service watch: %s on %s", watch.id, watch.entity_id)
+    await coordinator.watcher.async_add(watch)
+
+
 async def _async_handle_dnd_on(call: ServiceCall) -> None:
     """Handle herold.dnd_on (optionally as a session with an end condition)."""
     coordinator = _get_coordinator(call.hass)
@@ -323,6 +377,7 @@ _SERVICES = (
     (SERVICE_CANCEL, _async_handle_cancel, CANCEL_SCHEMA),
     (SERVICE_SCHEDULE, _async_handle_schedule, SCHEDULE_SCHEMA),
     (SERVICE_REMIND_SELF, _async_handle_remind_self, REMIND_SELF_SCHEMA),
+    (SERVICE_WATCH, _async_handle_watch, WATCH_SCHEMA),
     (SERVICE_DND_ON, _async_handle_dnd_on, DND_ON_SCHEMA),
     (SERVICE_DND_OFF, _async_handle_dnd_off, DND_OFF_SCHEMA),
 )

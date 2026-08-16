@@ -139,6 +139,12 @@ Du hast Zugriff auf die Herold-Tools (LLM-API "Herold" muss aktiviert sein):
   Stunde", "um 18 Uhr", "morgen früh"). Sage niemals, dass du keine
   zeitversetzten Aktionen ausführen kannst. Nutze dafür NICHT den
   Kalender und keine anderen Scheduling-Werkzeuge.
+- Nutze `herold_remind_when`, wenn die Erinnerung an ein Ereignis statt an
+  eine Uhrzeit gebunden ist ("wenn ich das nächste Mal die Haustür öffne",
+  "sobald die Waschmaschine fertig ist", "wenn es unter 5 Grad wird").
+- Lies IMMER das Feld "confirmation" aus dem Tool-Ergebnis vor, damit der
+  Nutzer weiß, dass wirklich etwas gespeichert wurde. Bei success=false
+  sage klar, dass es NICHT geklappt hat.
 - Nutze `herold_answer_query`, wenn der User eine offene Frage beantwortet
   (Ja/Nein fuzzy mappen: "klar" → "Ja", "bloß nicht" → "Nein").
 - Nutze `herold_acknowledge`, wenn der User ein Todo als erledigt meldet.
@@ -150,6 +156,34 @@ ausdrücklich eine Nachricht oder Durchsage.
 ```
 
 **Wichtig für die Migration:** Entferne das alte `script.ai_schedule_command` aus der Assist-Exposure (Einstellungen → Sprachassistenten → Entitäten), sonst greift das LLM weiterhin zum alten Kalender-Workflow statt zu `herold_remind_self`. Die Todos landen übrigens **nicht** im Prompt — `herold_list_pending` ist ein Live-Tool-Call, es gibt kein Caching-Problem.
+
+## Erinnerungen an Ereignisse knüpfen
+
+Neben zeitbasierten Erinnerungen kann Herold auf **Zustandsänderungen** warten — kleine Einmal-Automationen, die sich der Assistent selbst anlegt:
+
+> „Erinnere mich daran, dem Postboten das Paket mitzugeben, wenn ich das nächste Mal die Haustür öffne."
+
+```yaml
+service: herold.watch
+data:
+  entity_id: binary_sensor.haustuer_kontakt
+  to_state: "on"
+  message: Denk an das Paket für den Postboten!
+  priority: 3
+  ttl_hours: 72        # 0 = verfällt nie
+```
+
+Auch numerisch (`above` / `below`, feuert nur beim Überschreiten, nicht dauerhaft):
+
+```yaml
+service: herold.watch
+data:
+  entity_id: sensor.aussentemperatur
+  below: 5
+  message: Es wird frostig — denk an die Pflanzen auf dem Balkon.
+```
+
+Beobachtungen sind einmalig (danach löschen sie sich selbst), überleben Neustarts, verfallen nach der TTL und tauchen in der Karte unter „Geplant → Nach Ereignis" auf. Das LLM legt sie über `herold_remind_when` an und bekommt den Klarnamen der Entity zurück, damit du eine falsche Zuordnung sofort hörst. Automationen können auf `herold_watch_triggered` triggern.
 
 ## Dashboard-Karte
 
