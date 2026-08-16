@@ -120,9 +120,11 @@ INTERNAL_RESULT_UNVERIFIED: Final = "unverified"
 
 # Self-check tokens the agent is asked to answer with. Verification runs
 # exactly once per instruction — a correction never triggers another check.
+# English like every other prompt Herold sends to the LLM; nothing here is
+# ever spoken to the user.
 VERIFY_TOKEN_OK: Final = "OK"
-VERIFY_TOKEN_CORRECTED: Final = "KORRIGIERT"
-VERIFY_TOKEN_FAILED: Final = "FEHLER"
+VERIFY_TOKEN_CORRECTED: Final = "CORRECTED"
+VERIFY_TOKEN_FAILED: Final = "FAILED"
 
 # Channel names
 CHANNEL_VOICE: Final = "voice"

@@ -1,78 +1,97 @@
 # Herold 📯
 
-> **⚠️ Alpha — Not for production.** Diese Integration ist in aktiver Entwicklung (Phase 1 / MVP). API und Config-Format können sich noch ändern.
+*[Deutsche Version](README.de.md)*
 
-**Herold** ist eine Home Assistant Custom Integration für priorisierte Omnichannel-Benachrichtigungen: raumbewusste Sprachausgabe über Assist-Satelliten und Media Player, Push auf die Mobile App, mit DND-Logik, Offline-TTS-Fallback und einem 5-stufigen Prioritätsmodell.
+> **⚠️ Alpha — not for production.** Under active development; the API and the
+> config format can still change.
 
-Herold ist der Nachfolger des Scripts `System: Universal Omnichannel Communicator (Priority Edition)` — als wartbare, testbare Integration mit UI-Konfiguration.
+**Herold** is a Home Assistant custom integration for prioritised omnichannel
+notifications: room-aware voice output through Assist satellites and media
+players, mobile push, Telegram with answer buttons, an alarm clock, and a
+five-level priority model with do-not-disturb logic and an offline TTS
+fallback.
 
-## Voraussetzungen
+Herold is the successor of the script
+`System: Universal Omnichannel Communicator (Priority Edition)` — as a
+maintainable, testable integration with UI configuration.
 
-- **Home Assistant 2026.7.0 oder neuer**
-- Mindestens ein Assist-Satellit **oder** Media Player mit TTS
-- Optional: Mobile App (für Push), Präsenzsensoren (für Raumerkennung)
+> **A note on languages.** Code, comments, commit messages, the changelog and
+> every prompt Herold sends to an LLM are English. The user-facing surfaces —
+> config flow, entity names, this README's German twin, the test plan — are
+> German, because that is what the household speaks. See `translations/`.
 
-## Installation via HACS (Custom Repository)
+## Requirements
 
-1. HACS öffnen → Menü (⋮ oben rechts) → **Benutzerdefinierte Repositories**
-   *(Screenshot-Platzhalter)*
-2. Repository-URL eintragen: `https://github.com/BobMcGlobus/herold`, Typ: **Integration**
-   *(Screenshot-Platzhalter)*
-3. „Herold" in HACS suchen und installieren
-4. Home Assistant neu starten
-5. **Einstellungen → Geräte & Dienste → Integration hinzufügen → Herold**
-   *(Screenshot-Platzhalter)*
+- **Home Assistant 2026.7.0 or newer**
+- At least one Assist satellite **or** a media player with TTS
+- Optional: mobile app (for push), occupancy sensors (for room detection)
 
-## Einrichtung (Config Flow)
+## Installation via HACS (custom repository)
 
-Der Config Flow führt durch sechs Schritte:
+1. Open HACS → menu (⋮ top right) → **Custom repositories**
+2. Add the repository URL `https://github.com/BobMcGlobus/herold`,
+   type: **Integration**
+3. Search for "Herold" in HACS and install it
+4. Restart Home Assistant
+5. **Settings → Devices & services → Add integration → Herold**
 
-1. **Grundlagen** — Empfänger-Person, Name der Instanz
-2. **Räume** (wiederholbar) — pro Raum: Präsenzsensoren (mehrere möglich, ODER-verknüpft), Assist-Satellit und/oder Media Player, optional Licht für den P4-Alarm-Flash
-3. **Sprache** — primäres TTS (z.B. ElevenLabs), optionales Fallback-TTS (z.B. Piper), Internet-Erkennungssensor
-4. **Push** — Mobile-App-Notify-Entitäten
-5. **Chat** — optionale Telegram-Chat-ID für Nachrichten und Antwort-Buttons, optionaler Pending-Question-Helper (Legacy-Kompat für offene Fragen)
-6. **Nicht stören** — optionale externe DND-Entität, interner DND-Schalter
-7. **Offline** — Offline-TTS-Fallback (opt-in), Offline-Warteschlange (spätere Phase)
+## Setup (config flow)
 
-Alle Sektionen sind später über die Integrations-Optionen editierbar; Räume können ohne Neueinrichtung hinzugefügt, bearbeitet und entfernt werden.
+The config flow walks through seven steps:
 
-## Feature-Matrix
+1. **Basics** — recipient person, instance name
+2. **Rooms** (repeatable) — per room: occupancy sensors (several possible,
+   OR-linked), Assist satellite and/or media player, optional alarm lights
+   and scenes for the P4 flash, optional volume levels
+3. **Voice** — primary TTS (e.g. ElevenLabs), optional fallback TTS
+   (e.g. Piper), internet detection sensor
+4. **Push** — mobile app notify entities
+5. **Chat** — optional Telegram chat id for messages and answer buttons,
+   optional pending-question helper (legacy compatibility for open questions)
+6. **LLM** — conversation agent for P0 self-reminders plus a fallback agent,
+   toggles for speakable confirmations and the self-check
+7. **DND** — optional external DND entity, internal DND switch, quiet hours
+8. **Offline** — offline TTS fallback (opt-in), offline queue (planned)
+
+Every section stays editable through the integration options; rooms and
+templates can be added, edited and removed without re-running setup.
+
+## Feature matrix
 
 | Feature | Status |
 |---|---|
-| `herold.send` Service (P0–P4) | ✅ Phase 1 |
-| Raumbewusste Voice-Delivery (Occupancy → Satellit) | ✅ Phase 1 |
-| Multi-Occupancy-Sensoren pro Raum (ODER-verknüpft) | ✅ Phase 1 |
-| Media-Player-Only-Räume (`tts.speak` Fallback) | ✅ Phase 1 |
-| TTS-Kette: Primär → Offline-Fallback (z.B. ElevenLabs → Piper) | ✅ Phase 1 |
-| Mobile App Push (critical Sound für P4) | ✅ Phase 1 |
-| DND-Schalter + externe DND-Entität | ✅ Phase 1 |
-| `herold.query` — Fragen mit Antwort (yesno / open / choice) | ✅ Phase 2 |
-| Telegram-Channel mit Inline-Buttons (legacy-kompatibel) | ✅ Phase 2 |
-| Query-Persistenz über Neustarts, Timeout + default_answer | ✅ Phase 2 |
-| Multi-Occupancy-Konfliktauflösung (Gewicht + Aktualität) | ✅ Phase 2 |
-| Last-Known-Room-Fallback (TTL 15 min) | ✅ Phase 2 |
-| P4 Alarm-Blinken: mehrere Lichter und Szenen pro Raum | ✅ Phase 2 |
-| Pending-Sensoren (`pending_count`, `last_query`, `any_pending`) | ✅ Phase 2 |
-| `herold.schedule` + `herold.remind_self` (persistiert über Neustarts) | ✅ Phase 3 |
-| P0 Internal Channel (LLM-Self-Callback via `conversation.process`) | ✅ Phase 3 |
-| Native LLM-Tools (`list_pending`, `acknowledge`, `answer_query`, `remind_self`) | ✅ Phase 3 |
-| Todo-Inbox `todo.herold_eingang` für P1-Benachrichtigungen | ✅ Phase 3 |
-| Escalation-Chains für unbeantwortete Fragen | ✅ Phase 4 |
-| Voice-Timeout: Buttons gehen nach Telegram, wenn niemand antwortet | ✅ Phase 4 |
-| Rate-Limiting + P2-Aggregation (Anti-Spam) | ✅ Phase 4 |
-| DND-Sessions (`until`, `until_home`) | ✅ Phase 4 |
-| Benachrichtigungs-Vorlagen mit Jinja-Platzhaltern | ✅ Phase 4 |
-| pytest-Suite (Dispatcher, Router, Legacy-Kompat, Limiter, …) | ✅ Phase 5 |
-| Dashboard-Karte (Inbox / Geplant / Wecker / Logbuch) + Verlauf | ✅ v0.6.0 |
-| Antwort-Auswertung + Selbstkontrolle für LLM-Anweisungen | ✅ v0.7.0 |
-| Ereignis-Trigger (`herold.watch`, `herold_remind_when`) | ✅ v0.8.0 |
-| Lautstärkestufen pro Raum + Ruhezeiten | ✅ v0.9.0 |
-| Wecker mit Ramp-up, Snooze und Automation-Hooks | ✅ v1.0.0 |
-| Offline-Queue, Multi-User | 🔜 Backlog |
+| `herold.send` service (P0–P4) | ✅ 0.1.0 |
+| Room-aware voice delivery (occupancy → satellite) | ✅ 0.1.0 |
+| Multiple occupancy sensors per room (OR-linked) | ✅ 0.1.0 |
+| Media-player-only rooms (`tts.speak` fallback) | ✅ 0.1.0 |
+| TTS chain: primary → offline fallback (e.g. ElevenLabs → Piper) | ✅ 0.1.0 |
+| Mobile app push (critical sound for P4) | ✅ 0.1.0 |
+| DND switch plus external DND entity | ✅ 0.1.0 |
+| `herold.query` — questions expecting an answer (yesno / open / choice) | ✅ 0.2.0 |
+| Telegram channel with inline buttons (legacy compatible) | ✅ 0.2.0 |
+| Query persistence across restarts, timeout and `default_answer` | ✅ 0.2.0 |
+| Multi-occupancy conflict resolution (weight plus recency) | ✅ 0.2.0 |
+| Last-known-room fallback (15 min TTL) | ✅ 0.2.0 |
+| P4 alarm flash: several lights and scenes per room | ✅ 0.2.0 |
+| `herold.schedule` and `herold.remind_self` (persisted) | ✅ 0.3.0 |
+| P0 internal channel (LLM self-callback via `conversation.process`) | ✅ 0.3.0 |
+| Native LLM tools | ✅ 0.3.0 |
+| Todo inbox for P1 notifications | ✅ 0.3.0 |
+| Escalation chains for unanswered queries | ✅ 0.4.0 |
+| Voice timeout: buttons move to Telegram when nobody answers | ✅ 0.4.0 |
+| Rate limiting plus P2 aggregation (anti-spam) | ✅ 0.4.0 |
+| DND sessions (`until`, `until_home`) | ✅ 0.4.0 |
+| Notification templates with Jinja placeholders | ✅ 0.4.0 |
+| pytest suite (dispatcher, router, legacy compat, limiter, …) | ✅ 0.5.0 |
+| Dashboard card (inbox / scheduled / alarms / logbook) plus history | ✅ 0.6.0 |
+| Response inspection and self-check for LLM instructions | ✅ 0.7.0 |
+| State triggers (`herold.watch`, `herold_remind_when`) | ✅ 0.8.0 |
+| Per-room volume levels plus quiet hours | ✅ 0.9.0 |
+| Alarm clock with ramp-up, snooze and automation hooks | ✅ 1.0.0 |
+| Offline queue, multi-user | 🔜 backlog |
 
-Die vollständige Roadmap steht in [HEROLD_PLAN.md](HEROLD_PLAN.md).
+The full roadmap lives in [HEROLD_PLAN.md](HEROLD_PLAN.md), the release
+history in [CHANGELOG.md](CHANGELOG.md).
 
 ## Service: `herold.send`
 
@@ -80,8 +99,8 @@ Die vollständige Roadmap steht in [HEROLD_PLAN.md](HEROLD_PLAN.md).
 service: herold.send
 data:
   message: "Die Waschmaschine ist fertig"
-  priority: 2          # 0 intern · 1 todo · 2 normal · 3 wichtig · 4 alarm
-  # title: "Optionaler Push-Titel"
+  priority: 2          # 0 internal · 1 todo · 2 normal · 3 important · 4 alarm
+  # title: "Optional push title"
   # target_player: assist_satellite.wohnzimmer_sattelite_assist_satellit
   # tag: waschmaschine
   # ttl_minutes: 30
@@ -95,102 +114,153 @@ service: herold.query
 data:
   question: "Soll ich das Licht ausschalten?"
   mode: yesno          # yesno · open · choice
-  # choices: ["Pizza", "Pasta", "Salat"]   # nur für mode: choice
+  # choices: ["Pizza", "Pasta", "Salat"]   # only for mode: choice
   priority: 2
   timeout_minutes: 60
-  # default_answer: "Nein"   # wird beim Timeout automatisch verwendet
+  # voice_timeout_seconds: 90   # no voice answer → buttons go to Telegram
+  # default_answer: "Nein"      # used automatically on timeout
   # callback_event: AI_CONFIRM
 ```
 
-Antwortwege: Satelliten-Konversation (`start_conversation`), Telegram-Inline-Buttons, Freitext im Telegram-Chat (open), oder `herold.acknowledge` (id + answer). Offene Fragen überleben HA-Neustarts. Bei Antwort feuert `herold_answered` mit strukturiertem Payload — bei yesno zusätzlich das Legacy-Event (`AI_YES`/`AI_NO` bzw. `<custom>_YES`/`_NO`).
+Answer paths: satellite conversation (`start_conversation`), Telegram inline
+buttons, free text in the Telegram chat (open mode), the card, or
+`herold.acknowledge` (id plus answer). Open queries survive restarts. On an
+answer Herold fires `herold_answered` with a structured payload — for yesno
+additionally the legacy event (`AI_YES`/`AI_NO` resp. `<custom>_YES`/`_NO`).
 
-## Services: `herold.schedule` & `herold.remind_self`
+## Services: `herold.schedule` and `herold.remind_self`
 
 ```yaml
 service: herold.schedule
 data:
-  scheduled_for: "+1h30m"       # auch "18:00" oder ISO-Datum
+  scheduled_for: "+1h30m"       # also "18:00" or an ISO datetime
   message: "Ofen vorheizen nicht vergessen"
   priority: 2
 ```
 
 ```yaml
-service: herold.remind_self     # P0-Convenience für den Assistenten
+service: herold.remind_self     # P0 convenience for the assistant
 data:
   when: "+30m"
   instruction: "Frage den User via herold.query: Wie ist der Kuchen geworden?"
+  task_context: "Jonas backt gerade einen Kuchen."
 ```
 
-Geplante Benachrichtigungen überleben Neustarts; während einer Downtime verpasste Zustellungen werden innerhalb von 5 Minuten nachgeholt, ältere als `herold_expired` markiert. P0-Instruktionen laufen mit `[HEROLD_INTERNAL]`-Prefix durch den konfigurierten Conversation-Agent (Optionen → LLM), mit Fallback-Agent und Anti-Runaway-Limit (max. 20/Stunde).
+Scheduled notifications survive restarts; deliveries missed while Home
+Assistant was down still fire within five minutes, older ones are marked
+`herold_expired`. P0 instructions run through the configured conversation
+agent (options → LLM) with the `[HEROLD_INTERNAL]` prefix, a fallback agent
+and an anti-runaway limit (max 20 per hour).
 
-## LLM-Tools
+## LLM tools
 
-Herold registriert eine LLM-API namens **Herold** — aktivierbar pro Conversation-Agent unter *Sprachassistenten → Agent → LLM-APIs*. Tools: `herold_list_pending` („was ist neu?"), `herold_acknowledge` (Todo erledigt), `herold_answer_query` (Antwort auf offene Frage, inkl. Fuzzy-Matching), `herold_remind_self` (zeitversetzte Aufgaben).
+Herold registers an LLM API named **Herold** — enable it per conversation
+agent under *Voice assistants → agent → LLM APIs*. Tools:
 
-### System-Prompt-Vorlage (copy-paste in die Agent-Anweisungen)
+| Tool | Purpose |
+|---|---|
+| `herold_list_pending` | todos, open queries, schedules and watches |
+| `herold_acknowledge` | mark a todo as done |
+| `herold_answer_query` | answer an open query (with fuzzy matching) |
+| `herold_remind_self` | time-based self-reminder |
+| `herold_remind_when` | state-triggered reminder |
+| `herold_cancel` | cancel a reminder, watch or query |
+| `herold_set_alarm` / `herold_list_alarms` / `herold_cancel_alarm` | alarm clock |
 
-```yaml
-# In den Optionen des Conversation-Agents unter "Anweisungen" ergänzen:
+Every tool returns a ready-to-speak `confirmation` sentence that the tool
+description requires the agent to read back, so the user always hears whether
+something was really stored.
 
-## Herold — Benachrichtigungssystem des Hauses
+### System prompt block (copy-paste into the agent instructions)
 
-Du hast Zugriff auf die Herold-Tools (LLM-API "Herold" muss aktiviert sein):
+The prompt is English like all LLM-facing text; the quoted example phrases
+stay German because they are what the user actually says.
 
-- Nutze `herold_list_pending`, wenn der User fragt "was ist neu", "gibt es
-  was für mich", "hab ich was verpasst" — und proaktiv am Gesprächsende,
-  wenn etwas offen sein könnte.
-- Nutze `herold_remind_self` für ALLE zeitversetzten Aufgaben ("in einer
-  Stunde", "um 18 Uhr", "morgen früh"). Sage niemals, dass du keine
-  zeitversetzten Aktionen ausführen kannst. Nutze dafür NICHT den
-  Kalender und keine anderen Scheduling-Werkzeuge.
-- Nutze `herold_remind_when`, wenn die Erinnerung an ein Ereignis statt an
-  eine Uhrzeit gebunden ist ("wenn ich das nächste Mal die Haustür öffne",
-  "sobald die Waschmaschine fertig ist", "wenn es unter 5 Grad wird").
-- Lies IMMER das Feld "confirmation" aus dem Tool-Ergebnis vor, damit der
-  Nutzer weiß, dass wirklich etwas gespeichert wurde. Bei success=false
-  sage klar, dass es NICHT geklappt hat.
-- Nutze `herold_answer_query`, wenn der User eine offene Frage beantwortet
-  (Ja/Nein fuzzy mappen: "klar" → "Ja", "bloß nicht" → "Nein").
-- Nutze `herold_acknowledge`, wenn der User ein Todo als erledigt meldet.
+```markdown
+## Herold — the household notification system
 
-Nachrichten, die mit [HEROLD_INTERNAL] beginnen, sind interne Reminder von
-dir selbst (früher via herold_remind_self geplant). Führe die Anweisung
-stumm aus und antworte dem User nicht, außer die Anweisung verlangt
-ausdrücklich eine Nachricht oder Durchsage.
+You have access to the Herold tools (the "Herold" LLM API must be enabled):
+
+- Use `herold_list_pending` when the user asks "was ist neu", "gibt es was
+  für mich", "hab ich was verpasst" — and proactively at the end of a
+  conversation if something might be open.
+- Use `herold_remind_self` for ALL time-delayed tasks ("in einer Stunde",
+  "um 18 Uhr", "morgen früh"). Never tell the user you cannot perform
+  time-delayed actions. Do NOT use the calendar or any other scheduling
+  helper for this.
+- Use `herold_remind_when` when the reminder is tied to an event instead of
+  a time ("wenn ich das nächste Mal die Haustür öffne", "sobald die
+  Waschmaschine fertig ist", "wenn es unter 5 Grad wird").
+- Use `herold_set_alarm` for alarm clocks ("stell mir einen Wecker für
+  halb sieben"). While an alarm is ringing, "aus"/"stopp" and "snooze" are
+  handled by Herold itself — do not call a tool for them.
+- ALWAYS read the "confirmation" field of a tool result back to the user so
+  they know something was really stored. On success=false, say clearly that
+  it did NOT work.
+- Use `herold_answer_query` when the user answers an open question (map
+  fuzzy yes/no: "klar" → "Ja", "bloß nicht" → "Nein").
+- Use `herold_acknowledge` when the user reports a todo as done.
+
+Messages starting with [HEROLD_INTERNAL] are internal reminders from
+yourself (scheduled earlier via herold_remind_self). Execute the instruction
+silently and do not reply to the user, unless the instruction explicitly
+asks for a message or an announcement.
 ```
 
-**Wichtig für die Migration:** Entferne das alte `script.ai_schedule_command` aus der Assist-Exposure (Einstellungen → Sprachassistenten → Entitäten), sonst greift das LLM weiterhin zum alten Kalender-Workflow statt zu `herold_remind_self`. Die Todos landen übrigens **nicht** im Prompt — `herold_list_pending` ist ein Live-Tool-Call, es gibt kein Caching-Problem.
+**Important when migrating:** remove the old `script.ai_schedule_command`
+from the Assist exposure (Settings → Voice assistants → Entities), otherwise
+the LLM keeps reaching for the old calendar workflow instead of
+`herold_remind_self`. Todos do *not* end up in the prompt —
+`herold_list_pending` is a live tool call, so there is no caching problem.
 
-## Wecker
+## Alarm clock
 
-Herold weckt im Raum, in dem du bist, und nutzt dafür die konfigurierten Lautstärken und Alarm-Lichter:
+Herold wakes you in the room you are in, using the configured volumes and
+alarm lights:
 
 ```yaml
 service: herold.alarm_set
 data:
   time: "06:30"
-  days: [mon, tue, wed, thu, fri]   # weglassen = einmalig
+  days: [mon, tue, wed, thu, fri]   # omit for a one-shot alarm
   label: Arbeit
   message: Guten Morgen! Zeit aufzustehen.
 ```
 
-Beim Klingeln fährt die Lautstärke über mehrere Durchgänge sanft hoch (35 % → 100 % der „laut"-Stufe), die Alarm-Lichter des Raums dimmen über 30 Sekunden auf 60 % hoch, und der Wecker klingelt alle 45 Sekunden weiter, bis du ihn beendest — nach fünf Durchgängen gibt er auf. Weckrufe ignorieren bewusst DND, Ruhezeiten und Rate-Limiting.
+While ringing, the volume ramps up gently across rings (35 % → 100 % of the
+"loud" level), the room's alarm lights fade to 60 % over 30 seconds, and the
+alarm keeps ringing every 45 seconds until dismissed — after five rings it
+gives up. Alarm rings deliberately ignore DND, quiet hours and rate limiting.
 
-**Steuerung:** `herold.alarm_snooze` (Standard 9 min), `herold.alarm_dismiss`, `herold.alarm_cancel`. Ohne `id` beziehen sich Snooze und Dismiss auf den gerade klingelnden Wecker. In der Karte gibt es dafür den Tab **⏰ Wecker** mit Schlummer- und Aus-Buttons.
+**Control:** `herold.alarm_snooze` (default 9 min), `herold.alarm_dismiss`,
+`herold.alarm_cancel`. Without an `id`, snooze and dismiss act on the
+currently ringing alarm. The card has an **⏰** tab with snooze and dismiss
+buttons.
 
-**Für Automationen:** `sensor.herold_naechster_wecker` (Timestamp — als Trigger nutzbar), `binary_sensor.herold_wecker_klingelt`, plus die Events `herold_alarm_set`, `herold_alarm_triggered`, `herold_alarm_snoozed`, `herold_alarm_dismissed`. Das LLM kann Wecker über `herold_set_alarm`, `herold_list_alarms` und `herold_cancel_alarm` verwalten („Stell mir einen Wecker für halb sieben").
+**For automations:** `sensor.*_next_alarm` (timestamp — usable as a trigger),
+`binary_sensor.*_alarm_ringing`, plus the events `herold_alarm_set`,
+`herold_alarm_triggered`, `herold_alarm_snoozed`, `herold_alarm_dismissed`.
 
-## Lautstärke & Ruhezeiten
+## Volume and quiet hours
 
-Pro Raum lassen sich drei Lautstärkestufen hinterlegen (Optionen → Räume): **leise**, **normal**, **laut**. Herold setzt die passende Stufe vor der Durchsage und stellt danach die vorherige Lautstärke wieder her — erst wenn der Player wirklich fertig gesprochen hat. Stufen, die du leer lässt, ändern nichts: Ohne Konfiguration bleibt alles wie bisher.
+Each room can define three volume levels (options → rooms): **quiet**,
+**normal**, **loud**. Herold applies the matching level before an
+announcement and restores the previous volume afterwards — only once the
+player actually finished speaking. Levels left blank change nothing, so
+without configuration everything behaves as before.
 
-Welche Stufe genommen wird: **P4 immer laut**, sonst **normal** — außer innerhalb der **Ruhezeiten** (Optionen → Nicht stören, z.B. 22:00–07:00), dann **leise**. Ein Alarm um drei Uhr nachts bleibt also laut, eine normale Meldung nicht.
+Which level applies: **P4 is always loud**, otherwise **normal** — except
+inside the **quiet hours** (options → DND, e.g. 22:00–07:00), where it is
+**quiet**. An alarm at three in the morning stays loud, a routine message
+does not.
 
-## Erinnerungen an Ereignisse knüpfen
+## Tying reminders to events
 
-Neben zeitbasierten Erinnerungen kann Herold auf **Zustandsänderungen** warten — kleine Einmal-Automationen, die sich der Assistent selbst anlegt:
+Besides time-based reminders, Herold can wait for **state changes** — small
+one-shot automations the assistant creates for itself:
 
-> „Erinnere mich daran, dem Postboten das Paket mitzugeben, wenn ich das nächste Mal die Haustür öffne."
+> "Remind me to hand the parcel to the postman the next time I open the
+> front door."
 
 ```yaml
 service: herold.watch
@@ -199,10 +269,11 @@ data:
   to_state: "on"
   message: Denk an das Paket für den Postboten!
   priority: 3
-  ttl_hours: 72        # 0 = verfällt nie
+  ttl_hours: 72        # 0 = never expires
 ```
 
-Auch numerisch (`above` / `below`, feuert nur beim Überschreiten, nicht dauerhaft):
+Numeric thresholds work too (`above` / `below`, firing only on the crossing,
+not continuously):
 
 ```yaml
 service: herold.watch
@@ -212,35 +283,49 @@ data:
   message: Es wird frostig — denk an die Pflanzen auf dem Balkon.
 ```
 
-Beobachtungen sind einmalig (danach löschen sie sich selbst), überleben Neustarts, verfallen nach der TTL und tauchen in der Karte unter „Geplant → Nach Ereignis" auf. Das LLM legt sie über `herold_remind_when` an und bekommt den Klarnamen der Entity zurück, damit du eine falsche Zuordnung sofort hörst. Automationen können auf `herold_watch_triggered` triggern.
+Watches are one-shot (they remove themselves afterwards), survive restarts,
+expire after their TTL and appear in the card under *scheduled → by event*.
+The LLM creates them via `herold_remind_when` and gets the entity's friendly
+name back, so a wrong match is audible immediately. Automations can trigger
+on `herold_watch_triggered`.
 
-## Dashboard-Karte
+## Dashboard card
 
-Herold bringt eine eigene Lovelace-Karte mit — sie wird von der Integration automatisch als Ressource geladen, kein manuelles Registrieren nötig. Einfach im Dashboard **Karte hinzufügen → „Herold Card"** wählen oder per YAML:
+Herold ships its own Lovelace card — the integration registers it as a
+resource automatically, no manual setup needed. Pick **Add card → "Herold
+Card"** on a dashboard, or use YAML:
 
 ```yaml
 type: custom:herold-card
 title: Herold
 ```
 
-Drei Tabs:
+Four tabs:
 
-- **📥 Inbox** — offene Fragen mit Antwort-Buttons (Ja/Nein bzw. Choice-Optionen direkt klickbar) und die Todo-Liste mit Abhaken/Löschen
-- **🕐 Geplant** — anstehende Zustellungen mit Countdown und Cancel-Button
-- **📜 Logbuch** — die letzten 50 Ereignisse (zugestellt, verworfen inkl. Grund, beantwortet, eskaliert, Rate-Limit, …) aus `sensor.herold_verlauf` — überlebt Neustarts
+- **📥 Inbox** — open queries with answer buttons (yes/no resp. the choice
+  options, directly clickable) and the todo list with check-off and delete
+- **🕐 Scheduled** — upcoming deliveries with a countdown and a cancel
+  button, split into time-based and event-based entries
+- **⏰ Alarms** — configured alarm clocks with snooze, dismiss and delete
+- **📜 Logbook** — the last 50 events (delivered, dropped including the
+  reason, answered, escalated, rate limited, …) from the history sensor;
+  survives restarts
 
-Die Entities werden automatisch erkannt; bei Bedarf per `todo_entity`, `pending_entity`, `scheduled_entity`, `history_entity` überschreibbar.
+Entities are discovered automatically; override them with `todo_entity`,
+`pending_entity`, `scheduled_entity`, `history_entity`, `watches_entity` or
+`alarms_entity` if needed.
 
-## Phase-4-Features
+## Escalation, rate limiting, DND sessions, templates
 
-**Escalation** (bei `herold.query`): unbeantwortete Fragen werden nach Zeitplan mit höherer Priorität erneut zugestellt:
+**Escalation** (on `herold.query`): unanswered questions are redelivered at a
+higher priority on a schedule:
 
 ```yaml
 service: herold.query
 data:
   question: "Haustür ist offen — soll ich abschließen?"
   priority: 2
-  voice_timeout_seconds: 60     # keine Voice-Antwort → Buttons nach Telegram
+  voice_timeout_seconds: 60     # no voice answer → buttons go to Telegram
   escalation:
     - after_minutes: 5
       raise_to_priority: 3
@@ -248,47 +333,77 @@ data:
       raise_to_priority: 4
 ```
 
-**Rate-Limiting** (automatisch): P3 hat 60 s Cooldown pro Tag/Nachricht (Dedup), P2 max. 3 pro 5 Minuten — Überschuss wird gesammelt und als eine aggregierte Meldung nachgeliefert („3 Meldungen: …"). P4 ist nie limitiert. Bypass per `ignore_rate_limit: true`. Drops sind im `reason`-Attribut von `sensor.herold_letzte_zustellung` sichtbar.
+**Rate limiting** (automatic): P3 has a 60 s cooldown per tag/message
+(dedup), P2 allows max 3 per 5 minutes — the overflow is buffered and
+delivered as one aggregated message ("3 Meldungen: …"). P4 is never limited.
+Bypass with `ignore_rate_limit: true`. Drops are visible in the `reason`
+attribute of the last-delivery sensor.
 
-**DND-Sessions:** `herold.dnd_on` mit `until: "+1h"` / `until: "15:30"` oder `until_home: true` — endet automatisch, überlebt Neustarts. `herold.dnd_off` oder der Schalter beenden die Session manuell.
+**DND sessions:** `herold.dnd_on` with `until: "+1h"` / `until: "15:30"` or
+`until_home: true` — ends automatically and survives restarts.
+`herold.dnd_off` or the switch ends the session manually.
 
-**Vorlagen** (Optionen → Vorlagen): wiederverwendbare Nachrichten mit Jinja-Platzhaltern:
+**Templates** (options → templates): reusable messages with Jinja
+placeholders:
 
 ```yaml
 service: herold.send
 data:
-  template: appliance_done      # Vorlage: "{{ appliance }} ist fertig"
+  template: appliance_done      # template: "{{ appliance }} ist fertig"
   template_vars:
     appliance: Waschmaschine
 ```
 
-### Prioritätsmodell
+### Priority model
 
-| Prio | Name | Verhalten |
+| Prio | Name | Behaviour |
 |---|---|---|
-| 0 | Intern | LLM-Self-Callback via `conversation.process`, nie user-facing |
-| 1 | Todo | Landet still in `todo.herold_eingang` |
-| 2 | Normal | Voice wenn zuhause, sonst Push + Telegram; blockiert bei DND |
-| 3 | Wichtig | Voice + Push + Telegram, ignoriert DND |
-| 4 | Alarm | Warn-Durchsage + Alarm-Blinken + Critical Push + Telegram, ignoriert DND |
+| 0 | Internal | LLM self-callback via `conversation.process`, never user-facing |
+| 1 | Todo | Lands silently in the todo inbox |
+| 2 | Normal | Voice when home, otherwise push plus Telegram; blocked by DND |
+| 3 | Important | Voice plus push plus Telegram, ignores DND |
+| 4 | Alarm | Warning announcement, alarm flash, critical push, Telegram; ignores DND |
 
-## Migration vom Script
+## Migrating from the script
 
-Herold ist als Drop-in-Nachfolger des Omnichannel-Communicator-Scripts konzipiert:
+Herold is designed as a drop-in successor of the omnichannel communicator
+script:
 
-- **`input_boolean.notification_blocker`** kann im DND-Schritt als *externe DND-Entität* eingetragen werden — bestehende Automationen (Goodnight, Sport-Popup) bleiben unverändert.
-- **Callback-Events bleiben bit-exakt kompatibel:** `callback_event: AI_CONFIRM` (Default) erzeugt Telegram-Buttons mit den Callback-Daten `/AI_YES` / `/AI_NO` — **ohne** CONFIRM-Teil, exakt wie das Original-Script. Bestehende `telegram_callback`-Automationen laufen unverändert weiter; Herold feuert bei Antwort zusätzlich das HA-Event `AI_YES`/`AI_NO` (bzw. `<custom>_YES`/`_NO`) und `herold_answered`. Herold ruft bewusst **kein** `answer_callback_query` auf — das macht weiterhin deine bestehende Handler-Automation.
-- **Offene Fragen (`mode: open`)** spiegeln die Frage weiterhin in den konfigurierten `input_text`-Helper (z.B. `input_text.ai_pending_question`), damit die bestehende Telegram-Chat-Automation den Kontext behält.
-- **Empfohlener Rollout:** Integration parallel zum Script installieren, Verhalten vergleichen, Automationen schrittweise auf `herold.send` migrieren, Script erst nach zwei stabilen Wochen löschen.
+- **`input_boolean.notification_blocker`** can be configured as the
+  *external DND entity* in the DND step — existing automations (goodnight,
+  sports popup) keep working unchanged.
+- **Callback events stay bit-exact compatible:** `callback_event: AI_CONFIRM`
+  (the default) produces Telegram buttons with the callback data `/AI_YES` /
+  `/AI_NO` — **without** the CONFIRM part, exactly like the original script.
+  Existing `telegram_callback` automations keep running; on an answer Herold
+  additionally fires the HA event `AI_YES`/`AI_NO` (resp.
+  `<custom>_YES`/`_NO`) and `herold_answered`. Herold deliberately does
+  **not** call `answer_callback_query` — your existing handler automation
+  still does that.
+- **Open questions (`mode: open`)** still mirror the question into the
+  configured `input_text` helper (e.g. `input_text.ai_pending_question`), so
+  the existing Telegram chat automation keeps its context.
+- **Suggested rollout:** install the integration alongside the script,
+  compare behaviour, migrate automations to `herold.*` step by step, and
+  delete the script only after two stable weeks.
 
-## Entwicklung
+## Development
 
 ```bash
-./scripts/setup-dev.sh /pfad/zu/ha-config   # symlinkt die Integration
+./scripts/setup-dev.sh /path/to/ha-config   # symlinks the integration
 ```
 
-Manuelle Testfälle: **[TESTING.md](TESTING.md)** (konsolidiert, mit Copy-Paste-YAML) · Archiv: [Phase 1](PHASE_1_TESTPLAN.md) · [Phase 2](PHASE_2_TESTPLAN.md) · [Phase 3](PHASE_3_TESTPLAN.md) · [Phase 4](PHASE_4_TESTPLAN.md)
+Run the test suite:
 
-## Lizenz
+```bash
+pip install -r requirements_test.txt && pytest tests/
+```
+
+Manual test cases: **[TESTING.md](TESTING.md)** (consolidated, with
+copy-paste YAML) · archive: [Phase 1](PHASE_1_TESTPLAN.md) ·
+[Phase 2](PHASE_2_TESTPLAN.md) · [Phase 3](PHASE_3_TESTPLAN.md) ·
+[Phase 4](PHASE_4_TESTPLAN.md)
+
+## License
 
 [MIT](LICENSE)

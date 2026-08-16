@@ -53,8 +53,9 @@ def test_inspect_tolerates_missing_payload() -> None:
     [
         ("OK", INTERNAL_RESULT_OK),
         ("ok", INTERNAL_RESULT_OK),
-        ("KORRIGIERT", INTERNAL_RESULT_CORRECTED),
-        ("FEHLER", INTERNAL_RESULT_FAILED),
+        ("CORRECTED", INTERNAL_RESULT_CORRECTED),
+        ("corrected", INTERNAL_RESULT_CORRECTED),
+        ("FAILED", INTERNAL_RESULT_FAILED),
         ("Ich habe keine Ahnung", INTERNAL_RESULT_UNVERIFIED),
         ("", INTERNAL_RESULT_UNVERIFIED),
     ],
@@ -76,5 +77,7 @@ def test_prompt_includes_context_when_given() -> None:
 
     with_context = InternalChannel._build_prompt("Licht aus", "Jonas geht ins Bett")
     assert with_context.startswith(HEROLD_INTERNAL_PREFIX)
+    # Scaffolding in English, user content untouched
+    assert "Background from the earlier conversation" in with_context
     assert "Jonas geht ins Bett" in with_context
     assert "Licht aus" in with_context

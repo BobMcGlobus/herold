@@ -50,13 +50,13 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 VERIFY_PROMPT = (
-    "{prefix} Selbstkontrolle: Du hast eben diese Anweisung ausgeführt: "
-    '"{instruction}". Prüfe jetzt den tatsächlichen Zustand der betroffenen '
-    "Geräte bzw. ob die Nachricht wirklich rausgegangen ist. Wenn etwas "
-    "fehlt, führe genau diesen fehlenden Teil jetzt aus. Antworte "
-    "ausschließlich mit einem einzigen Wort: {ok} wenn schon alles korrekt "
-    "war, {corrected} wenn du nachgebessert hast, {failed} wenn es nicht "
-    "möglich ist. Sprich den Nutzer nicht an."
+    "{prefix} Self-check: you just executed this instruction: "
+    '"{instruction}". Now verify the actual state of the affected devices, '
+    "or whether the message really went out. If something is missing, "
+    "perform exactly that missing part now. Reply with a single word and "
+    "nothing else: {ok} if everything was already correct, {corrected} if "
+    "you fixed something, {failed} if it is not possible. Do not address "
+    "the user."
 )
 
 
@@ -140,11 +140,16 @@ class InternalChannel(BaseChannel):
 
     @staticmethod
     def _build_prompt(instruction: str, task_context: str | None) -> str:
-        """Prefix the instruction, optionally with the original conversation."""
+        """Prefix the instruction, optionally with the original conversation.
+
+        The scaffolding is English (like every Herold prompt); the
+        instruction and context themselves stay in whatever language the
+        user and the agent spoke.
+        """
         if task_context:
             return (
-                f"{HEROLD_INTERNAL_PREFIX} Hintergrund aus dem früheren "
-                f"Gespräch: {task_context}. Anweisung: {instruction}"
+                f"{HEROLD_INTERNAL_PREFIX} Background from the earlier "
+                f"conversation: {task_context}. Instruction: {instruction}"
             )
         return f"{HEROLD_INTERNAL_PREFIX} {instruction}"
 
