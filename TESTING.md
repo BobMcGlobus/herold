@@ -8,7 +8,8 @@ Alle noch offenen bzw. wiederholbaren Tests mit fertigen YAML-Snippets für
 - Log-Level: `custom_components.herold: debug` in der `logger:`-Config
 - Zweiter Browser-Tab: **Entwicklerwerkzeuge → Ereignisse** und dort auf
   `herold_delivered`, `herold_answered`, `herold_escalated`, `herold_expired`,
-  `herold_scheduled`, `herold_internal_triggered`, `AI_YES`, `AI_NO` lauschen
+  `herold_scheduled`, `herold_internal_triggered`, `herold_internal_verified`,
+  `herold_watch_triggered`, `herold_alarm_triggered`, `AI_YES`, `AI_NO` lauschen
 - Ab v0.6.0: Die **Herold-Karte** (Logbuch-Tab) zeigt alle Ereignisse live —
   ersetzt für die meisten Checks das Log-Graben.
 - Entity-Namen unten sind die deutschen Defaults; bei dir ggf. per
@@ -316,3 +317,181 @@ Voraussetzung: LLM-API „Herold" beim Agent aktiviert, System-Prompt-Block aus 
 - ☐ K1: Karte hinzufügen (Dashboard → Karte → „Herold Card" oder YAML `type: custom:herold-card`) — alle drei Tabs füllen sich ohne weitere Config
 - ☐ K2: Logbuch-Tab zeigt nach B1/B2 „Zugestellt"/„Verworfen" mit Grund; Einträge überleben Neustart (max. 50)
 - ☐ K3: Tab „Geplant": ✕ cancelt wirklich (Gegencheck: `sensor.herold_naechste_zustellung` springt um)
+
+---
+
+## 11. LLM-Rückmeldung & Selbstkontrolle (v0.7.0)
+
+Voraussetzung: Optionen → LLM → P0-Agent gesetzt, „Sprechbare Tool-Bestätigungen" und „Selbstkontrolle" an (Standard).
+
+### ☐ L1 — Bestätigung wird vorgelesen
+
+Am Sat: *„Erinnere mich in zehn Minuten daran, den Ofen auszuschalten."*
+
+**Erwartet:** Der Agent antwortet mit der Bestätigung inkl. Uhrzeit („Ist gespeichert — ich kümmere mich heute um … darum."). In der Karte erscheint der Eintrag unter „Geplant".
+
+### ☐ L2 — Ausführung wird geprüft
+
+```yaml
+action: herold.send
+data:
+  message: Schalte die Schreibtischlampe ein.
+  priority: 0
+```
+
+**Erwartet:** Lampe geht an. `sensor.herold_letzte_interne_anweisung` = `ok` (oder `corrected`, wenn der Agent nachgebessert hat) mit Instruktion und Agent-Antwort in den Attributen. Events: `herold_internal_triggered` **und** `herold_internal_verified`.
+
+### ☐ L3 — Fehlschlag wird sichtbar
+
+```yaml
+action: herold.send
+data:
+  message: Schalte das Gerät "Gibtsnicht" ein.
+  priority: 0
+```
+
+**Erwartet:** Sensor-Status `failed` (oder `unverified`), Fehlerdetail im Attribut, Logbuch-Eintrag „Intern fehlgeschlagen" — statt wie früher stillschweigend als Erfolg zu gelten.
+
+### ☐ L4 — Kontext überlebt bis zur Ausführung
+
+```yaml
+action: herold.remind_self
+data:
+  when: "+2m"
+  instruction: Frag nach, wie es gelaufen ist.
+  task_context: Jonas hatte um 14 Uhr ein Bewerbungsgespräch.
+```
+
+**Erwartet:** Nach 2 min bekommt der Agent den Hintergrund mit — die Nachfrage passt zum Thema statt generisch zu sein.
+
+### ☐ L5 — Absagen per Sprache
+
+Nach L1 am Sat: *„Vergiss die Erinnerung mit dem Ofen."*
+
+**Erwartet:** Agent ruft `herold_cancel`, Eintrag verschwindet aus der Karte, Bestätigung wird vorgelesen.
+
+---
+
+## 12. Ereignis-Trigger (v0.8.0)
+
+### ☐ E1 — Zustandswechsel per Service
+
+```yaml
+action: herold.watch
+data:
+  entity_id: binary_sensor.haustuer_kontakt
+  to_state: "on"
+  message: Denk an das Paket für den Postboten!
+  priority: 3
+```
+
+**Erwartet:** Karte → „Geplant → Nach Ereignis" zeigt die Bedingung. Beim Öffnen der Tür kommt die Meldung, der Eintrag verschwindet (einmalig), Event `herold_watch_triggered`.
+
+### ☐ E2 — Per Sprache
+
+Am Sat: *„Erinnere mich daran, die Wäsche aufzuhängen, wenn die Waschmaschine fertig ist."*
+
+**Erwartet:** Agent ruft `herold_remind_when` und liest die Bestätigung inklusive **Klarname der Entity** vor — so fällt eine falsche Zuordnung sofort auf.
+
+### ☐ E3 — Schwellwert
+
+```yaml
+action: herold.watch
+data:
+  entity_id: sensor.aussentemperatur
+  below: 5
+  message: Es wird frostig.
+```
+
+**Erwartet:** Löst beim Unterschreiten **einmal** aus, nicht bei jedem weiteren Messwert darunter.
+
+### ☐ E4 — Überlebt Neustart
+
+Watch anlegen, HA neu starten, dann die Entity auslösen. **Erwartet:** feuert weiterhin.
+
+---
+
+## 13. Lautstärke & Ruhezeiten (v0.9.0)
+
+Setup: Optionen → Räume → Arbeitszimmer: leise 15 %, normal 45 %, laut 80 %. Optionen → Nicht stören: Ruhezeit 22:00–07:00.
+
+### ☐ VL1 — Normale Stufe + Wiederherstellung
+
+Media-Player auf eine ungewöhnliche Lautstärke stellen (z.B. 70 %), dann tagsüber:
+
+```yaml
+action: herold.send
+data:
+  message: Lautstärke-Test
+  priority: 2
+```
+
+**Erwartet:** Durchsage mit 45 %, danach steht die Lautstärke wieder auf 70 %.
+
+### ☐ VL2 — Ruhezeit
+
+Gleicher Aufruf innerhalb der Ruhezeit (oder Fenster testweise auf die aktuelle Uhrzeit legen). **Erwartet:** deutlich leiser (15 %). Gegenprobe mit `priority: 4` → laut (80 %), Ruhezeit wird ignoriert.
+
+### ☐ VL3 — Ohne Konfiguration keine Änderung
+
+Raum ohne Lautstärke-Werte → Herold fasst die Lautstärke nicht an (Verhalten wie vor v0.9.0).
+
+---
+
+## 14. Wecker (v1.0.0)
+
+### ☐ W1 — Wecker stellen und klingeln lassen
+
+```yaml
+action: herold.alarm_set
+data:
+  time: "07:00"
+  label: Test
+  message: Guten Morgen! Zeit aufzustehen.
+```
+
+Zum Testen die Zeit auf „in 2 Minuten" setzen. **Erwartet:** `sensor.herold_naechster_wecker` zeigt den Zeitpunkt, Karten-Tab „Wecker" listet ihn. Beim Klingeln: Durchsage im aktiven Raum, Licht dimmt hoch, `binary_sensor.herold_wecker_klingelt` = on, Event `herold_alarm_triggered`.
+
+### ☐ W2 — Lautstärke-Rampe
+
+Nicht reagieren und zwei bis drei Durchgänge abwarten. **Erwartet:** jeder Durchgang klingt lauter (35 % → 55 % → 75 % der „laut"-Stufe), Abstand ~45 s.
+
+### ☐ W3 — Snooze & Dismiss
+
+Während es klingelt (Karte oder Service ohne `id`):
+
+```yaml
+action: herold.alarm_snooze
+data:
+  minutes: 1
+```
+
+**Erwartet:** Ruhe, nach 1 min klingelt es erneut. Dann `herold.alarm_dismiss` → Ruhe, Binary-Sensor off, bei wiederkehrendem Wecker steht die nächste Wiederholung im Sensor.
+
+### ☐ W4 — Aufgeben nach 5 Durchgängen
+
+Wecker klingeln lassen und nicht reagieren. **Erwartet:** nach dem fünften Durchgang endet er von selbst (`herold_alarm_dismissed`).
+
+### ☐ W5 — Wiederkehrend + Neustart
+
+```yaml
+action: herold.alarm_set
+data:
+  time: "06:30"
+  days: [mon, tue, wed, thu, fri]
+  label: Arbeit
+```
+
+**Erwartet:** Karte zeigt „werktags um 06:30 Uhr". Nach HA-Neustart ist der Wecker weiterhin da und der Timestamp-Sensor stimmt.
+
+### ☐ W6 — Wecker ignoriert DND
+
+DND einschalten, Test-Wecker klingeln lassen. **Erwartet:** klingelt trotzdem (auch in der Ruhezeit, auch laut).
+
+### ☐ W7 — Per Sprache
+
+Am Sat: *„Stell mir einen Wecker für halb sieben."* → Bestätigung wird vorgelesen. Danach *„Welche Wecker habe ich?"* und *„Lösch den Wecker."*
+
+### ☐ W8 — Automation-Hook
+
+Test-Automation mit Trigger auf `binary_sensor.herold_wecker_klingelt` = on (z.B. Rollladen hoch). **Erwartet:** läuft beim Klingeln los.
