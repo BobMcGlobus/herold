@@ -265,13 +265,18 @@ class AlarmManager:
                 "alarm_triggered", alarm.label or alarm.message
             )
 
-        await self.coordinator.async_ring_alarm(
-            message=alarm.message,
-            ramp=self._ramp_factor(alarm.rings),
-            priority=PRIORITY_ALARM,
-            volume_level=VOLUME_LOUD,
-            flash=first_ring,
-        )
+        try:
+            await self.coordinator.async_ring_alarm(
+                message=alarm.message,
+                ramp=self._ramp_factor(alarm.rings),
+                priority=PRIORITY_ALARM,
+                volume_level=VOLUME_LOUD,
+                flash=first_ring,
+            )
+        except Exception:
+            # One failed ring must not end the alarm — the next one is armed
+            # below and may well succeed (speaker back online, TTS reachable).
+            _LOGGER.exception("Alarm %s could not ring", alarm.id)
 
         # Next ring, unless the user dismissed/snoozed while we were speaking.
         if alarm.status != ALARM_STATUS_RINGING:

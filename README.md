@@ -37,7 +37,7 @@ maintainable, testable integration with UI configuration.
 
 ## Setup (config flow)
 
-The config flow walks through seven steps:
+The config flow walks through nine steps:
 
 1. **Basics** — recipient person, instance name
 2. **Rooms** (repeatable) — per room: occupancy sensors (several possible,
@@ -51,7 +51,9 @@ The config flow walks through seven steps:
 6. **LLM** — conversation agent for P0 self-reminders plus a fallback agent,
    toggles for speakable confirmations and the self-check
 7. **DND** — optional external DND entity, internal DND switch, quiet hours
-8. **Offline** — offline TTS fallback (opt-in), offline queue (planned)
+8. **Alarm clock** — bed sensor, bedroom, optional alarm speaker, snooze
+   duration and give-up threshold
+9. **Offline** — offline TTS fallback (opt-in), offline queue (planned)
 
 Every section stays editable through the integration options; rooms and
 templates can be added, edited and removed without re-running setup.
@@ -230,6 +232,14 @@ While ringing, the volume ramps up gently across rings (35 % → 100 % of the
 "loud" level), the room's alarm lights fade to 60 % over 30 seconds, and the
 alarm keeps ringing every 45 seconds until dismissed — after five rings it
 gives up. Alarm rings deliberately ignore DND, quiet hours and rate limiting.
+
+**Where it rings** (options → alarm clock): occupancy sensors stay quiet
+while you lie still, so Herold needs to know your sleeping area — otherwise a
+morning alarm finds no active room and falls back to a silent push. Configure
+a **bed sensor** and a **bedroom**, and the resolution becomes: in bed → the
+bedroom; already up and moving → the active room; nothing occupied → the
+bedroom anyway. An explicit alarm satellite or speaker overrides all of that.
+`sensor.*_next_alarm` shows the current `target`, and so does the card.
 
 **Control:** `herold.alarm_snooze` (default 9 min), `herold.alarm_dismiss`,
 `herold.alarm_cancel`. Without an `id`, snooze and dismiss act on the

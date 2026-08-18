@@ -73,3 +73,16 @@ def test_ramp_grows_and_clamps() -> None:
 def test_roundtrip() -> None:
     alarm = Alarm(time="07:15", days=["mon", "fri"], label="Work")
     assert Alarm.from_dict(alarm.to_dict()) == alarm
+
+
+def test_german_weekday_names_are_mapped() -> None:
+    from custom_components.herold.llm_tools import canonical_day
+
+    # "Dienstag"[:3] would be "die" — the old naive slicing broke here
+    assert canonical_day("Dienstag") == "tue"
+    assert canonical_day("montag") == "mon"
+    assert canonical_day("Sonnabend") == "sat"
+    assert canonical_day("Mi") == "wed"
+    assert canonical_day("friday") == "fri"
+    assert canonical_day("sun") == "sun"
+    assert canonical_day("Blursday") is None

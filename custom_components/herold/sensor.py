@@ -356,6 +356,10 @@ class HeroldNextAlarmSensor(HeroldSignalSensor):
             "id": upcoming.id if upcoming else None,
             "label": upcoming.label if upcoming else None,
             "schedule": upcoming.describe() if upcoming else None,
+            # Where it would ring right now — the single most useful thing
+            # when an alarm stays silent.
+            "target": self.coordinator.describe_alarm_target(),
+            "in_bed": self.coordinator.in_bed,
             "alarms": [
                 {
                     "id": alarm.id,

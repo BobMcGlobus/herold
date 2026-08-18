@@ -6,6 +6,25 @@ README) are German — see `translations/`. Entity ids below use the English
 names; on a German instance they are the translated ones, e.g.
 `sensor.herold_naechster_wecker` for `sensor.*_next_alarm`.
 
+## 1.1.0 — Alarms reach the bedroom
+
+- **Fixes alarms staying silent.** Occupancy sensors do not fire while
+  somebody lies still, so at wake-up time the room router found no active
+  room and the alarm degraded to a push notification. Alarms now resolve
+  their own target
+- New **alarm section** in the options: a bed sensor, the bedroom (picked
+  from the configured rooms), optional satellite/speaker overrides, snooze
+  duration and the give-up threshold
+- Target resolution: in bed → the bedroom; already up → the active room;
+  nothing occupied → the bedroom as fallback. Explicit satellite or speaker
+  overrides everything, and no configured output at all logs a warning
+  instead of failing quietly
+- A failed ring no longer ends the alarm — the next ring is armed anyway
+- `sensor.*_next_alarm` exposes `target` and `in_bed`, and the card's alarm
+  tab shows where a ring would go right now
+- German weekday names work when setting alarms by voice ("Dienstag" used
+  to be truncated to "die" and rejected)
+
 ## 1.0.2 — Tool errors no longer abort the conversation
 
 - A tool raising an unexpected exception used to kill the whole voice

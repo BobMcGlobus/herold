@@ -267,6 +267,8 @@
             color: var(--secondary-text-color); margin: 10px 4px 2px; }
           .answers { display: flex; gap: 6px; flex-wrap: wrap;
             margin-top: 6px; }
+          .note { font-size: 0.8em; color: var(--secondary-text-color);
+            padding: 4px 4px 8px; }
           .warn { font-size: 0.8em; color: var(--warning-color, #ffa726);
             padding: 6px 4px; }
         </style>
@@ -312,12 +314,26 @@
       return (stateObj && stateObj.attributes.alarms) || [];
     }
 
+    _alarmMeta(ids) {
+      if (!ids.alarms) return {};
+      const stateObj = this._hass.states[ids.alarms];
+      return (stateObj && stateObj.attributes) || {};
+    }
+
     _renderAlarms(ids) {
       const alarms = this._alarmItems(ids);
+      const meta = this._alarmMeta(ids);
+      // Where a ring would go right now — the thing you want to see when an
+      // alarm stayed silent.
+      const target = meta.target
+        ? `<div class="note">🔊 Klingelt aktuell in: <b>${esc(meta.target)}</b>${
+            meta.in_bed ? " · im Bett erkannt" : ""
+          }</div>`
+        : "";
       if (!alarms.length) {
-        return '<div class="empty">Keine Wecker gestellt.</div>';
+        return `${target}<div class="empty">Keine Wecker gestellt.</div>`;
       }
-      return alarms
+      return target + alarms
         .map((alarm) => {
           const ringing = alarm.status === "ringing";
           const buttons = ringing

@@ -78,6 +78,18 @@
           "enable_offline_fallback": "Enable offline TTS fallback",
           "enable_offline_queue": "Enable offline queue"
         }
+      },
+      "alarm": {
+        "title": "Alarm clock",
+        "description": "Occupancy sensors do not fire while you lie still, so tell Herold where you sleep — otherwise a morning alarm finds no active room and falls back to a silent push.",
+        "data": {
+          "alarm_bed_sensor": "Bed sensor (in bed)",
+          "alarm_room": "Bedroom (used while in bed)",
+          "alarm_sat_entity": "Alarm satellite (overrides the room)",
+          "alarm_media_player_entity": "Alarm speaker (overrides the room)",
+          "alarm_snooze_minutes": "Snooze duration (minutes)",
+          "alarm_max_rings": "Give up after this many rings"
+        }
       }
     },
     "error": {
@@ -101,7 +113,8 @@
           "llm": "LLM (internal reminders)",
           "dnd": "Do not disturb",
           "offline": "Offline behavior",
-          "templates_menu": "Templates (add / edit / remove)"
+          "templates_menu": "Templates (add / edit / remove)",
+          "alarm": "Alarm clock"
         }
       },
       "basic": {
@@ -246,6 +259,17 @@
         "title": "Remove templates",
         "data": {
           "template_names": "Templates to remove"
+        }
+      },
+      "alarm": {
+        "title": "Alarm clock",
+        "data": {
+          "alarm_bed_sensor": "Bed sensor (in bed)",
+          "alarm_room": "Bedroom (used while in bed)",
+          "alarm_sat_entity": "Alarm satellite (overrides the room)",
+          "alarm_media_player_entity": "Alarm speaker (overrides the room)",
+          "alarm_snooze_minutes": "Snooze duration (minutes)",
+          "alarm_max_rings": "Give up after this many rings"
         }
       }
     },

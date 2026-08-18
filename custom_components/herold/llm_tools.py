@@ -71,6 +71,27 @@ _WEEKDAYS = (
 )
 
 
+# The model answers in the user's language, and "Dienstag"[:3] is "die",
+# not "tue" — map the German day names explicitly.
+_DAY_ALIASES = {
+    "montag": "mon", "mo": "mon", "monday": "mon",
+    "dienstag": "tue", "di": "tue", "tuesday": "tue",
+    "mittwoch": "wed", "mi": "wed", "wednesday": "wed",
+    "donnerstag": "thu", "do": "thu", "thursday": "thu",
+    "freitag": "fri", "fr": "fri", "friday": "fri",
+    "samstag": "sat", "sonnabend": "sat", "sa": "sat", "saturday": "sat",
+    "sonntag": "sun", "so": "sun", "sunday": "sun",
+}
+
+
+def canonical_day(value: str) -> str | None:
+    """Map a weekday name in any accepted spelling to mon..sun."""
+    cleaned = value.strip().lower()
+    if cleaned in WEEKDAYS:
+        return cleaned
+    return _DAY_ALIASES.get(cleaned)
+
+
 def describe_when(moment: datetime, hass: HomeAssistant) -> str:
     """Render a UTC moment as a German phrase ('morgen um 08:00 Uhr')."""
     local = dt_util.as_local(moment)
@@ -482,10 +503,13 @@ class SetAlarmTool(HeroldTool):
     )
 
     async def _run(self, **kwargs: Any) -> dict[str, Any]:
-        days = [day.lower()[:3] for day in kwargs.get("days") or []]
-        if invalid := [day for day in days if day not in WEEKDAYS]:
+        requested = kwargs.get("days") or []
+        days = [day for raw in requested if (day := canonical_day(raw))]
+        if len(days) != len(requested):
+            unknown = [raw for raw in requested if not canonical_day(raw)]
             raise HomeAssistantError(
-                f"Invalid weekday(s): {invalid} — use mon/tue/wed/thu/fri/sat/sun"
+                f"Invalid weekday(s): {unknown} — use mon, tue, wed, thu, "
+                "fri, sat or sun"
             )
         alarm = Alarm(
             time=kwargs["time"],

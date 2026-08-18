@@ -29,7 +29,7 @@ Herold ist der Nachfolger des Scripts `System: Universal Omnichannel Communicato
 
 ## Einrichtung (Config Flow)
 
-Der Config Flow führt durch acht Schritte:
+Der Config Flow führt durch neun Schritte:
 
 1. **Grundlagen** — Empfänger-Person, Name der Instanz
 2. **Räume** (wiederholbar) — pro Raum: Präsenzsensoren (mehrere möglich, ODER-verknüpft), Assist-Satellit und/oder Media Player, optional Lichter und Szenen für den P4-Alarm-Flash, optional Lautstärkestufen
@@ -38,7 +38,8 @@ Der Config Flow führt durch acht Schritte:
 5. **Chat** — optionale Telegram-Chat-ID für Nachrichten und Antwort-Buttons, optionaler Pending-Question-Helper (Legacy-Kompat für offene Fragen)
 6. **LLM** — Conversation-Agent für P0-Selbsterinnerungen plus Fallback-Agent, Schalter für sprechbare Bestätigungen und die Selbstkontrolle
 7. **Nicht stören** — optionale externe DND-Entität, interner DND-Schalter, Ruhezeiten
-8. **Offline** — Offline-TTS-Fallback (opt-in), Offline-Warteschlange (geplant)
+8. **Wecker** — Bett-Sensor, Schlafzimmer, optionaler Wecker-Lautsprecher, Schlummerdauer
+9. **Offline** — Offline-TTS-Fallback (opt-in), Offline-Warteschlange (geplant)
 
 Alle Sektionen sind später über die Integrations-Optionen editierbar; Räume und Vorlagen können ohne Neueinrichtung hinzugefügt, bearbeitet und entfernt werden.
 
@@ -183,6 +184,8 @@ data:
 ```
 
 Beim Klingeln fährt die Lautstärke über mehrere Durchgänge sanft hoch (35 % → 100 % der „laut"-Stufe), die Alarm-Lichter des Raums dimmen über 30 Sekunden auf 60 % hoch, und der Wecker klingelt alle 45 Sekunden weiter, bis du ihn beendest — nach fünf Durchgängen gibt er auf. Weckrufe ignorieren bewusst DND, Ruhezeiten und Rate-Limiting.
+
+**Wo er klingelt** (Optionen → Wecker): Präsenzsensoren melden nichts, während du ruhig liegst — Herold muss also wissen, wo du schläfst, sonst findet ein Morgenwecker keinen aktiven Raum und fällt auf eine stille Push-Nachricht zurück. Hinterlege einen **Bett-Sensor** und ein **Schlafzimmer**, dann gilt: im Bett → Schlafzimmer; schon auf → der aktive Raum; nichts belegt → trotzdem das Schlafzimmer. Ein explizit gesetzter Wecker-Satellit oder -Lautsprecher überschreibt all das. `sensor.herold_naechster_wecker` zeigt das aktuelle Ziel, die Karte ebenfalls.
 
 **Steuerung:** `herold.alarm_snooze` (Standard 9 min), `herold.alarm_dismiss`, `herold.alarm_cancel`. Ohne `id` beziehen sich Snooze und Dismiss auf den gerade klingelnden Wecker. In der Karte gibt es dafür den Tab **⏰ Wecker** mit Schlummer- und Aus-Buttons.
 

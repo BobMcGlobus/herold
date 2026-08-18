@@ -28,6 +28,12 @@ from homeassistant.helpers.selector import (
 import voluptuous as vol
 
 from .const import (
+    CONF_ALARM_BED_SENSOR,
+    CONF_ALARM_MAX_RINGS,
+    CONF_ALARM_MEDIA_PLAYER,
+    CONF_ALARM_ROOM,
+    CONF_ALARM_SAT_ENTITY,
+    CONF_ALARM_SNOOZE_MINUTES,
     CONF_CREATE_INTERNAL_SWITCH,
     CONF_ENABLE_OFFLINE_FALLBACK,
     CONF_ENABLE_OFFLINE_QUEUE,
@@ -57,6 +63,8 @@ from .const import (
     CONF_VOLUME_LOUD,
     CONF_VOLUME_NORMAL,
     CONF_VOLUME_QUIET,
+    DEFAULT_ALARM_MAX_RINGS,
+    DEFAULT_ALARM_SNOOZE_MINUTES,
     DEFAULT_CREATE_INTERNAL_SWITCH,
     DEFAULT_ENABLE_OFFLINE_FALLBACK,
     DEFAULT_ENABLE_OFFLINE_QUEUE,
@@ -193,6 +201,59 @@ TEMPLATE_SCHEMA = vol.Schema(
         vol.Optional("title"): TextSelector(),
         vol.Optional("tag"): TextSelector(),
     }
+)
+
+def build_alarm_schema(rooms: list[dict[str, Any]]) -> vol.Schema:
+    """Alarm options; the room dropdown lists the configured rooms."""
+    room_options = [
+        SelectOptionDict(value=room[CONF_ROOM_NAME], label=room[CONF_ROOM_NAME])
+        for room in rooms
+    ]
+    schema: dict[Any, Any] = {
+        vol.Optional(CONF_ALARM_BED_SENSOR): EntitySelector(
+            EntitySelectorConfig(domain=["binary_sensor", "input_boolean"])
+        ),
+    }
+    if room_options:
+        schema[vol.Optional(CONF_ALARM_ROOM)] = SelectSelector(
+            SelectSelectorConfig(
+                options=room_options, mode=SelectSelectorMode.DROPDOWN
+            )
+        )
+    schema.update(
+        {
+            vol.Optional(CONF_ALARM_SAT_ENTITY): EntitySelector(
+                EntitySelectorConfig(domain="assist_satellite")
+            ),
+            vol.Optional(CONF_ALARM_MEDIA_PLAYER): EntitySelector(
+                EntitySelectorConfig(domain="media_player")
+            ),
+            vol.Required(
+                CONF_ALARM_SNOOZE_MINUTES, default=DEFAULT_ALARM_SNOOZE_MINUTES
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=1, max=60, step=1, mode=NumberSelectorMode.BOX
+                )
+            ),
+            vol.Required(
+                CONF_ALARM_MAX_RINGS, default=DEFAULT_ALARM_MAX_RINGS
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=1, max=20, step=1, mode=NumberSelectorMode.BOX
+                )
+            ),
+        }
+    )
+    return vol.Schema(schema)
+
+
+ALARM_KEYS = (
+    CONF_ALARM_BED_SENSOR,
+    CONF_ALARM_ROOM,
+    CONF_ALARM_SAT_ENTITY,
+    CONF_ALARM_MEDIA_PLAYER,
+    CONF_ALARM_SNOOZE_MINUTES,
+    CONF_ALARM_MAX_RINGS,
 )
 
 BASIC_KEYS = (CONF_RECIPIENT, CONF_INTEGRATION_NAME)
@@ -374,8 +435,19 @@ class HeroldConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle the DND step."""
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_offline()
+            return await self.async_step_alarm()
         return self.async_show_form(step_id="dnd", data_schema=DND_SCHEMA)
+
+    async def async_step_alarm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle the alarm clock step."""
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_offline()
+        return self.async_show_form(
+            step_id="alarm", data_schema=build_alarm_schema(self._rooms)
+        )
 
     async def async_step_offline(
         self, user_input: dict[str, Any] | None = None
@@ -434,6 +506,7 @@ class HeroldOptionsFlow(OptionsFlow):
                 "chat",
                 "llm",
                 "dnd",
+                "alarm",
                 "offline",
                 "templates_menu",
             ],
@@ -494,6 +567,17 @@ class HeroldOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Edit the DND section."""
         return self._async_step_section("dnd", DND_SCHEMA, DND_KEYS, user_input)
+
+    async def async_step_alarm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit the alarm clock section."""
+        return self._async_step_section(
+            "alarm",
+            build_alarm_schema(self._current.get(CONF_ROOMS, [])),
+            ALARM_KEYS,
+            user_input,
+        )
 
     async def async_step_offline(
         self, user_input: dict[str, Any] | None = None

@@ -216,6 +216,10 @@ VOLUME_RESTORE_POLL_SECONDS: Final = 0.5
 
 # --- Alarm clock ---------------------------------------------------------
 CONF_ALARM_SNOOZE_MINUTES: Final = "alarm_snooze_minutes"
+CONF_ALARM_BED_SENSOR: Final = "alarm_bed_sensor"
+CONF_ALARM_ROOM: Final = "alarm_room"
+CONF_ALARM_SAT_ENTITY: Final = "alarm_sat_entity"
+CONF_ALARM_MEDIA_PLAYER: Final = "alarm_media_player_entity"
 CONF_ALARM_MAX_RINGS: Final = "alarm_max_rings"
 CONF_ALARM_LIGHT_ENTITIES: Final = "alarm_light_entities"
 

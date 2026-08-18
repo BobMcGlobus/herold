@@ -37,6 +37,10 @@ from .const import (
     CHANNEL_TELEGRAM,
     CHANNEL_TODO,
     CHANNEL_VOICE,
+    CONF_ALARM_BED_SENSOR,
+    CONF_ALARM_MEDIA_PLAYER,
+    CONF_ALARM_ROOM,
+    CONF_ALARM_SAT_ENTITY,
     CONF_ENABLE_OFFLINE_FALLBACK,
     CONF_EXTERNAL_DND_ENTITY,
     CONF_FALLBACK_TTS,
@@ -528,6 +532,39 @@ class HeroldCoordinator:
         """Run the dispatch pipeline for a query."""
         return await self.query_manager.async_ask(query)
 
+    @property
+    def in_bed(self) -> bool:
+        """Return True if the configured bed sensor reports occupancy."""
+        sensor = self.config.get(CONF_ALARM_BED_SENSOR)
+        if not sensor:
+            return False
+        return self.hass.states.is_state(sensor, STATE_ON)
+
+    @callback
+    def _configured_alarm_room(self) -> Room | None:
+        """Return the room picked as the sleeping area, if any."""
+        name = self.config.get(CONF_ALARM_ROOM)
+        if not name:
+            return None
+        return next((room for room in self.rooms if room.name == name), None)
+
+    async def async_get_alarm_room(self) -> Room | None:
+        """Return the room an alarm should ring in.
+
+        Occupancy sensors do not fire while somebody lies still in bed, so
+        the normal room router would find nothing at wake-up time and the
+        alarm would degrade to a silent push. The sleeping area wins
+        whenever the bed sensor says the user is in it, and it is also the
+        fallback when no room is active at all.
+        """
+        bedroom = self._configured_alarm_room()
+        if bedroom is not None and self.in_bed:
+            return bedroom
+        active = await self.async_get_active_room()
+        if active is not None:
+            return active
+        return bedroom
+
     async def async_ring_alarm(
         self,
         message: str,
@@ -542,39 +579,39 @@ class HeroldCoordinator:
         ignore DND, quiet hours and the rate limiter, and it ramps the
         configured loud volume up over successive rings.
         """
-        room = await self.async_get_active_room()
-        if room is None:
-            _LOGGER.debug("Alarm ring: no room available, falling back to push")
-            await self.channels[CHANNEL_PUSH].deliver(
-                Notification(message=message, priority=priority), self
+        room = await self.async_get_alarm_room()
+
+        # Explicit alarm outputs win over whatever the room provides.
+        sat_entity = self.config.get(CONF_ALARM_SAT_ENTITY) or (
+            room.sat_entity if room else None
+        )
+        player = self.config.get(CONF_ALARM_MEDIA_PLAYER) or (
+            room.media_player_entity if room else None
+        )
+
+        if sat_entity is None and player is None:
+            _LOGGER.warning(
+                "Alarm ring has no speaker: configure an alarm room or an "
+                "alarm speaker in the options. Falling back to push"
             )
+            await self._async_alarm_push(message, priority)
             return
 
-        if flash:
-            for entity_id in room.flash_entities:
-                service = "turn_on"
-                domain = "scene" if entity_id.startswith("scene.") else "light"
-                data: dict[str, Any] = {"entity_id": entity_id}
-                if domain == "light":
-                    # Sunrise-ish rather than the P4 red strobe.
-                    data.update({"brightness_pct": 60, "transition": 30})
-                await self.hass.services.async_call(
-                    domain, service, data, blocking=False
-                )
+        if flash and room is not None:
+            await self._async_alarm_lights(room)
 
-        base = room.volume_for(volume_level)
+        base = room.volume_for(volume_level) if room else None
         volume = round(base * ramp, 3) if base is not None else None
-        player = room.media_player_entity
 
         async with self.volume.announce_at(player, volume):
-            if room.sat_entity:
+            if sat_entity:
                 await self.hass.services.async_call(
                     "assist_satellite",
                     "announce",
-                    {"entity_id": room.sat_entity, "message": message},
+                    {"entity_id": sat_entity, "message": message},
                     blocking=True,
                 )
-            elif player:
+            else:
                 await self.hass.services.async_call(
                     "tts",
                     "speak",
@@ -585,3 +622,44 @@ class HeroldCoordinator:
                     },
                     blocking=True,
                 )
+
+    async def _async_alarm_lights(self, room: Room) -> None:
+        """Fade the room's alarm lights up instead of the P4 red strobe."""
+        for entity_id in room.flash_entities:
+            domain = "scene" if entity_id.startswith("scene.") else "light"
+            data: dict[str, Any] = {"entity_id": entity_id}
+            if domain == "light":
+                data.update({"brightness_pct": 60, "transition": 30})
+            try:
+                await self.hass.services.async_call(
+                    domain, "turn_on", data, blocking=False
+                )
+            except HomeAssistantError as err:
+                _LOGGER.debug("Alarm light %s failed: %s", entity_id, err)
+
+    async def _async_alarm_push(self, message: str, priority: int) -> None:
+        """Last resort so a missing speaker does not swallow the alarm."""
+        try:
+            await self.channels[CHANNEL_PUSH].deliver(
+                Notification(message=message, priority=priority), self
+            )
+        except (ChannelUnavailable, HomeAssistantError) as err:
+            _LOGGER.error("Alarm could not be delivered at all: %s", err)
+
+    @callback
+    def describe_alarm_target(self) -> str:
+        """Describe where an alarm would ring, for the sensor and the card."""
+        explicit = self.config.get(CONF_ALARM_SAT_ENTITY) or self.config.get(
+            CONF_ALARM_MEDIA_PLAYER
+        )
+        if explicit:
+            return explicit
+        bedroom = self._configured_alarm_room()
+        if bedroom is not None and self.in_bed:
+            return bedroom.name
+        active = select_room(self)
+        if active is not None:
+            return active.name
+        if bedroom is not None:
+            return bedroom.name
+        return "kein Lautsprecher konfiguriert"

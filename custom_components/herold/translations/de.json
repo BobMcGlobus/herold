@@ -78,6 +78,18 @@
           "enable_offline_fallback": "Offline-TTS-Fallback aktivieren",
           "enable_offline_queue": "Offline-Warteschlange aktivieren"
         }
+      },
+      "alarm": {
+        "title": "Wecker",
+        "description": "Präsenzsensoren melden nichts, während du ruhig liegst — sag Herold daher, wo du schläfst. Sonst findet ein Morgenwecker keinen aktiven Raum und fällt auf eine stille Push-Nachricht zurück.",
+        "data": {
+          "alarm_bed_sensor": "Bett-Sensor (im Bett)",
+          "alarm_room": "Schlafzimmer (gilt, solange du im Bett bist)",
+          "alarm_sat_entity": "Wecker-Satellit (überschreibt den Raum)",
+          "alarm_media_player_entity": "Wecker-Lautsprecher (überschreibt den Raum)",
+          "alarm_snooze_minutes": "Schlummerdauer (Minuten)",
+          "alarm_max_rings": "Aufgeben nach so vielen Durchgängen"
+        }
       }
     },
     "error": {
@@ -101,7 +113,8 @@
           "llm": "LLM (interne Erinnerungen)",
           "dnd": "Nicht stören",
           "offline": "Offline-Verhalten",
-          "templates_menu": "Vorlagen (hinzufügen / bearbeiten / entfernen)"
+          "templates_menu": "Vorlagen (hinzufügen / bearbeiten / entfernen)",
+          "alarm": "Wecker"
         }
       },
       "basic": {
@@ -246,6 +259,17 @@
         "title": "Vorlagen entfernen",
         "data": {
           "template_names": "Zu entfernende Vorlagen"
+        }
+      },
+      "alarm": {
+        "title": "Wecker",
+        "data": {
+          "alarm_bed_sensor": "Bett-Sensor (im Bett)",
+          "alarm_room": "Schlafzimmer (gilt, solange du im Bett bist)",
+          "alarm_sat_entity": "Wecker-Satellit (überschreibt den Raum)",
+          "alarm_media_player_entity": "Wecker-Lautsprecher (überschreibt den Raum)",
+          "alarm_snooze_minutes": "Schlummerdauer (Minuten)",
+          "alarm_max_rings": "Aufgeben nach so vielen Durchgängen"
         }
       }
     },
