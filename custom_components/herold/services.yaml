@@ -273,6 +273,10 @@ alarm_set:
       example: "07:00"
       selector:
         time:
+    key:
+      example: schichtplan
+      selector:
+        text:
     days:
       example: "mon, tue, wed, thu, fri"
       selector:
@@ -295,6 +299,138 @@ alarm_set:
       selector:
         text:
           multiline: true
+    urgency:
+      example: normal
+      selector:
+        select:
+          options:
+            - gentle
+            - normal
+            - insistent
+    sound_mode:
+      example: builtin
+      selector:
+        select:
+          options:
+            - builtin
+            - media
+            - music_assistant
+            - announce
+    sound:
+      example: chime
+      selector:
+        text:
+    announce:
+      selector:
+        boolean:
+    voice_snooze:
+      selector:
+        boolean:
+    routine:
+      example: script.guten_morgen
+      selector:
+        entity:
+          domain:
+            - script
+            - scene
+            - automation
+    workday_only:
+      selector:
+        boolean:
+    valid_until:
+      example: "+7d"
+      selector:
+        text:
+    enabled:
+      selector:
+        boolean:
+
+alarm_update:
+  fields:
+    id:
+      required: true
+      example: a1b2c3d4
+      selector:
+        text:
+    time:
+      example: "07:00"
+      selector:
+        time:
+    days:
+      example: "mon, tue, wed, thu, fri"
+      selector:
+        select:
+          multiple: true
+          options:
+            - mon
+            - tue
+            - wed
+            - thu
+            - fri
+            - sat
+            - sun
+    label:
+      example: Arbeit
+      selector:
+        text:
+    message:
+      example: "Guten Morgen! Zeit aufzustehen."
+      selector:
+        text:
+          multiline: true
+    urgency:
+      example: normal
+      selector:
+        select:
+          options:
+            - gentle
+            - normal
+            - insistent
+    sound_mode:
+      example: builtin
+      selector:
+        select:
+          options:
+            - builtin
+            - media
+            - music_assistant
+            - announce
+    sound:
+      example: chime
+      selector:
+        text:
+    announce:
+      selector:
+        boolean:
+    voice_snooze:
+      selector:
+        boolean:
+    routine:
+      example: script.guten_morgen
+      selector:
+        entity:
+          domain:
+            - script
+            - scene
+            - automation
+    workday_only:
+      selector:
+        boolean:
+    valid_until:
+      example: "+7d"
+      selector:
+        text:
+    enabled:
+      selector:
+        boolean:
+
+alarm_skip_next:
+  fields:
+    id:
+      required: true
+      example: a1b2c3d4
+      selector:
+        text:
 
 alarm_cancel:
   fields:

@@ -81,14 +81,25 @@
       },
       "alarm": {
         "title": "Alarm clock",
-        "description": "Occupancy sensors do not fire while you lie still, so tell Herold where you sleep — otherwise a morning alarm finds no active room and falls back to a silent push.",
+        "description": "Occupancy sensors do not fire while you lie still, so tell Herold where you sleep. The speaker is preferred over the satellite because only it can play a wake-up tone. Lights come up early, blinds shortly before — an open blind is far more intrusive than a dim lamp.",
         "data": {
           "alarm_bed_sensor": "Bed sensor (in bed)",
           "alarm_room": "Bedroom (used while in bed)",
-          "alarm_sat_entity": "Alarm satellite (overrides the room)",
-          "alarm_media_player_entity": "Alarm speaker (overrides the room)",
+          "alarm_media_player_entity": "Alarm speaker (preferred — plays the tone)",
+          "alarm_sat_entity": "Alarm satellite (only for voice snooze)",
+          "alarm_volume_min": "Volume floor (%)",
+          "alarm_volume_max": "Volume ceiling when ignored (%)",
           "alarm_snooze_minutes": "Snooze duration (minutes)",
-          "alarm_max_rings": "Give up after this many rings"
+          "alarm_max_rings": "Give up after this many rings",
+          "alarm_verify_dismiss": "Only stop when you actually get up",
+          "alarm_verify_seconds": "Grace period for that check (seconds)",
+          "alarm_light_lead_minutes": "Start lights this many minutes early",
+          "alarm_cover_entities": "Blinds to open",
+          "alarm_cover_lead_minutes": "Open blinds this many minutes early",
+          "alarm_cover_position": "Blind position (%)",
+          "alarm_routine": "Good morning routine (runs after getting up)",
+          "alarm_workday_sensor": "Workday sensor",
+          "alarm_sick_entity": "Sick day toggle"
         }
       }
     },
@@ -266,10 +277,21 @@
         "data": {
           "alarm_bed_sensor": "Bed sensor (in bed)",
           "alarm_room": "Bedroom (used while in bed)",
-          "alarm_sat_entity": "Alarm satellite (overrides the room)",
-          "alarm_media_player_entity": "Alarm speaker (overrides the room)",
+          "alarm_media_player_entity": "Alarm speaker (preferred — plays the tone)",
+          "alarm_sat_entity": "Alarm satellite (only for voice snooze)",
+          "alarm_volume_min": "Volume floor (%)",
+          "alarm_volume_max": "Volume ceiling when ignored (%)",
           "alarm_snooze_minutes": "Snooze duration (minutes)",
-          "alarm_max_rings": "Give up after this many rings"
+          "alarm_max_rings": "Give up after this many rings",
+          "alarm_verify_dismiss": "Only stop when you actually get up",
+          "alarm_verify_seconds": "Grace period for that check (seconds)",
+          "alarm_light_lead_minutes": "Start lights this many minutes early",
+          "alarm_cover_entities": "Blinds to open",
+          "alarm_cover_lead_minutes": "Open blinds this many minutes early",
+          "alarm_cover_position": "Blind position (%)",
+          "alarm_routine": "Good morning routine (runs after getting up)",
+          "alarm_workday_sensor": "Workday sensor",
+          "alarm_sick_entity": "Sick day toggle"
         }
       }
     },
@@ -648,6 +670,26 @@
         "id": {
           "name": "Alarm ID",
           "description": "Defaults to the currently ringing alarm."
+        }
+      }
+    },
+    "alarm_update": {
+      "name": "Update alarm",
+      "description": "Changes an existing alarm — the card's editor uses this.",
+      "fields": {
+        "id": {
+          "name": "Alarm ID",
+          "description": "The alarm to change."
+        }
+      }
+    },
+    "alarm_skip_next": {
+      "name": "Skip next alarm",
+      "description": "Skips one occurrence of a repeating alarm without deleting it.",
+      "fields": {
+        "id": {
+          "name": "Alarm ID",
+          "description": "The alarm to skip once."
         }
       }
     }

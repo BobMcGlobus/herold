@@ -38,7 +38,7 @@ Der Config Flow führt durch neun Schritte:
 5. **Chat** — optionale Telegram-Chat-ID für Nachrichten und Antwort-Buttons, optionaler Pending-Question-Helper (Legacy-Kompat für offene Fragen)
 6. **LLM** — Conversation-Agent für P0-Selbsterinnerungen plus Fallback-Agent, Schalter für sprechbare Bestätigungen und die Selbstkontrolle
 7. **Nicht stören** — optionale externe DND-Entität, interner DND-Schalter, Ruhezeiten
-8. **Wecker** — Bett-Sensor, Schlafzimmer, optionaler Wecker-Lautsprecher, Schlummerdauer
+8. **Wecker** — Bett-Sensor, Schlafzimmer, Wecker-Lautsprecher, Lautstärkegrenzen, Schlummer- und Aufgeben-Einstellungen, Aufsteh-Prüfung, Vorlaufzeiten für Licht und Rolladen, Guten-Morgen-Routine, Arbeitstag- und Krankheits-Sensor
 9. **Offline** — Offline-TTS-Fallback (opt-in), Offline-Warteschlange (geplant)
 
 Alle Sektionen sind später über die Integrations-Optionen editierbar; Räume und Vorlagen können ohne Neueinrichtung hinzugefügt, bearbeitet und entfernt werden.
@@ -76,6 +76,7 @@ Alle Sektionen sind später über die Integrations-Optionen editierbar; Räume u
 | Ereignis-Trigger (`herold.watch`, `herold_remind_when`) | ✅ 0.8.0 |
 | Lautstärkestufen pro Raum + Ruhezeiten | ✅ 0.9.0 |
 | Wecker mit Ramp-up, Snooze und Automation-Hooks | ✅ 1.0.0 |
+| Wecker: Wecktöne, Hartnäckigkeitsstufen, Aufsteh-Prüfung, eigene Karte | ✅ 1.2.0 |
 | Offline-Queue, Multi-User | 🔜 Backlog |
 
 Die Release-Historie steht in [CHANGELOG.md](CHANGELOG.md).
@@ -172,7 +173,7 @@ asks for a message or an announcement.
 
 ## Wecker
 
-Herold weckt im Raum, in dem du bist, und nutzt dafür die konfigurierten Lautstärken und Alarm-Lichter:
+Herold weckt dich in dem Raum, in dem du schläfst — und zwar mit einem echten Ton statt eines gesprochenen Satzes. Eine TTS-Zeile hat keinen Attack und keine Frequenzspitzen; genau deshalb verschläft man sie.
 
 ```yaml
 service: herold.alarm_set
@@ -180,16 +181,40 @@ data:
   time: "06:30"
   days: [mon, tue, wed, thu, fri]   # weglassen = einmalig
   label: Arbeit
-  message: Guten Morgen! Zeit aufzustehen.
+  urgency: insistent                # gentle · normal · insistent
+  workday_only: true                # Feiertage und Krankheit blockieren
+  # key: schichtplan                # damit eine Automation den Wecker besitzt
+  # valid_until: "+7d"              # temporärer Wecker
 ```
 
-Beim Klingeln fährt die Lautstärke über mehrere Durchgänge sanft hoch (35 % → 100 % der „laut"-Stufe), die Alarm-Lichter des Raums dimmen über 30 Sekunden auf 60 % hoch, und der Wecker klingelt alle 45 Sekunden weiter, bis du ihn beendest — nach fünf Durchgängen gibt er auf. Weckrufe ignorieren bewusst DND, Ruhezeiten und Rate-Limiting.
+**Am bequemsten über die Karte.** `custom:herold-alarm-card` aufs Dashboard: Liste mit großen Uhrzeiten und Schaltern, ＋ zum Anlegen, Tippen zum Bearbeiten — Uhrzeit, Wochentage, Bezeichnung, Hartnäckigkeit, Weckton und der Arbeitstag-Schalter. Auf dem iPhone öffnet das Zeitfeld das native Rad.
 
-**Wo er klingelt** (Optionen → Wecker): Präsenzsensoren melden nichts, während du ruhig liegst — Herold muss also wissen, wo du schläfst, sonst findet ein Morgenwecker keinen aktiven Raum und fällt auf eine stille Push-Nachricht zurück. Hinterlege einen **Bett-Sensor** und ein **Schlafzimmer**, dann gilt: im Bett → Schlafzimmer; schon auf → der aktive Raum; nichts belegt → trotzdem das Schlafzimmer. Ein explizit gesetzter Wecker-Satellit oder -Lautsprecher überschreibt all das. `sensor.herold_naechster_wecker` zeigt das aktuelle Ziel, die Karte ebenfalls.
+```yaml
+type: custom:herold-alarm-card
+title: Wecker
+```
 
-**Steuerung:** `herold.alarm_snooze` (Standard 9 min), `herold.alarm_dismiss`, `herold.alarm_cancel`. Ohne `id` beziehen sich Snooze und Dismiss auf den gerade klingelnden Wecker. In der Karte gibt es dafür den Tab **⏰ Wecker** mit Schlummer- und Aus-Buttons.
+**Weckton** — vier Töne liegen bei (Glocke, Piepen, Sirene, Sonnenaufgang; von `scripts/generate_sounds.py` synthetisiert, daher ohne Lizenzfragen). `sound_mode` wählt die Quelle: `builtin`, `media` (beliebige Mediendatei, z.B. selbst hochgeladen), `music_assistant`, oder `announce` für das alte reine Sprechen. Die Ansage ist optional und folgt dem Ton.
 
-**Für Automationen:** `sensor.herold_naechster_wecker` (Timestamp — als Trigger nutzbar), `binary_sensor.herold_wecker_klingelt`, plus die Events `herold_alarm_set`, `herold_alarm_triggered`, `herold_alarm_snoozed`, `herold_alarm_dismissed`. Das LLM kann Wecker über `herold_set_alarm`, `herold_list_alarms` und `herold_cancel_alarm` verwalten („Stell mir einen Wecker für halb sieben").
+**Hartnäckigkeit** bestimmt, wie zäh er ist:
+
+| Stufe | Intervall | Gibt auf nach | Schlummern |
+|---|---|---|---|
+| sanft | 90 s | 3 Durchgängen | unbegrenzt |
+| normal | 45 s | 6 Durchgängen | 3× |
+| hartnäckig | 25 s | 15 Durchgängen | 1×, dann verweigert |
+
+**Die Lautstärke** bleibt zwischen einer einstellbaren Unter- und Obergrenze (Optionen → Wecker). Der erste Durchgang startet an der Untergrenze und klettert Richtung Obergrenze, solange du nicht reagierst — ein abends leise gedrehter Lautsprecher kann den Wecker also nicht mehr schlucken.
+
+**Aufstehen wird geprüft:** Ein Dismiss, während der Bett-Sensor noch Belegung meldet, gilt als Reflex — nach einer Karenzzeit macht der Wecker weiter. In den Optionen abschaltbar, falls dir das zu streng ist.
+
+**Vor dem Ton** fährt das Licht hoch (Standard 20 Minuten vorher) und die Rolladen öffnen (Standard 5 Minuten vorher) — beide Zeiten einstellbar, `0` schaltet die Stufe ab. Die **Guten-Morgen-Routine** (Script oder Szene) läuft, wenn du wirklich aufgestanden bist, nicht beim ersten Schlummern.
+
+**Arbeitswecker** mit `workday_only` werden übersprungen, wenn der Arbeitstag-Sensor aus oder der Krankheits-Schalter an ist. Einmalige und Feiertagswecker klingeln trotzdem — dafür stellt man sie ja.
+
+**Steuerung:** `herold.alarm_snooze`, `herold.alarm_dismiss`, `herold.alarm_update`, `herold.alarm_skip_next`, `herold.alarm_cancel`. Ohne `id` beziehen sich Snooze und Dismiss auf den klingelnden Wecker.
+
+**Für Automationen:** `sensor.herold_naechster_wecker` (Timestamp, dazu `target` und `in_bed`), `binary_sensor.herold_wecker_klingelt`, plus die Events `herold_alarm_set`, `herold_alarm_triggered`, `herold_alarm_snoozed`, `herold_alarm_dismissed`, `herold_alarm_skipped`, `herold_alarm_pre`.
 
 ## Lautstärke & Ruhezeiten
 

@@ -12,18 +12,21 @@ import voluptuous as vol
 
 from .const import (
     ATTR_ABOVE,
+    ATTR_ANNOUNCE,
     ATTR_ANSWER,
     ATTR_BELOW,
     ATTR_CALLBACK_EVENT,
     ATTR_CHOICES,
     ATTR_DAYS,
     ATTR_DEFAULT_ANSWER,
+    ATTR_ENABLED,
     ATTR_ENTITY_ID,
     ATTR_ESCALATION,
     ATTR_FROM_STATE,
     ATTR_ID,
     ATTR_IGNORE_RATE_LIMIT,
     ATTR_INSTRUCTION,
+    ATTR_KEY,
     ATTR_LABEL,
     ATTR_MESSAGE,
     ATTR_MINUTES,
@@ -32,7 +35,10 @@ from .const import (
     ATTR_QUESTION,
     ATTR_REASON,
     ATTR_RECIPIENT,
+    ATTR_ROUTINE,
     ATTR_SCHEDULED_FOR,
+    ATTR_SOUND,
+    ATTR_SOUND_MODE,
     ATTR_SOURCE,
     ATTR_TAG,
     ATTR_TARGET_PLAYER,
@@ -47,10 +53,13 @@ from .const import (
     ATTR_TTL_MINUTES,
     ATTR_UNTIL,
     ATTR_UNTIL_HOME,
+    ATTR_URGENCY,
+    ATTR_VALID_UNTIL,
+    ATTR_VOICE_SNOOZE,
     ATTR_VOICE_TIMEOUT_SECONDS,
     ATTR_WHEN,
+    ATTR_WORKDAY_ONLY,
     CONF_RECIPIENT,
-    DEFAULT_ALARM_MESSAGE,
     DEFAULT_PRIORITY,
     DEFAULT_QUERY_TIMEOUT_MINUTES,
     DEFAULT_WATCH_TTL_HOURS,
@@ -64,7 +73,9 @@ from .const import (
     SERVICE_ALARM_CANCEL,
     SERVICE_ALARM_DISMISS,
     SERVICE_ALARM_SET,
+    SERVICE_ALARM_SKIP_NEXT,
     SERVICE_ALARM_SNOOZE,
+    SERVICE_ALARM_UPDATE,
     SERVICE_CANCEL,
     SERVICE_DND_OFF,
     SERVICE_DND_ON,
@@ -73,6 +84,8 @@ from .const import (
     SERVICE_SCHEDULE,
     SERVICE_SEND,
     SERVICE_WATCH,
+    SOUND_MODES,
+    URGENCY_LEVELS,
     WEEKDAYS,
 )
 from .entity_resolver import normalize_trigger
@@ -158,12 +171,34 @@ WATCH_SCHEMA = vol.Schema(
     }
 )
 
+_ALARM_FIELDS = {
+    vol.Optional(ATTR_DAYS): vol.All(cv.ensure_list, [vol.In(WEEKDAYS)]),
+    vol.Optional(ATTR_LABEL): cv.string,
+    vol.Optional(ATTR_MESSAGE): cv.string,
+    vol.Optional(ATTR_URGENCY): vol.In(URGENCY_LEVELS),
+    vol.Optional(ATTR_SOUND_MODE): vol.In(SOUND_MODES),
+    vol.Optional(ATTR_SOUND): cv.string,
+    vol.Optional(ATTR_ANNOUNCE): cv.boolean,
+    vol.Optional(ATTR_VOICE_SNOOZE): cv.boolean,
+    vol.Optional(ATTR_ROUTINE): cv.entity_id,
+    vol.Optional(ATTR_WORKDAY_ONLY): cv.boolean,
+    vol.Optional(ATTR_VALID_UNTIL): cv.string,
+    vol.Optional(ATTR_ENABLED): cv.boolean,
+}
+
 ALARM_SET_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_TIME): cv.string,
-        vol.Optional(ATTR_DAYS): vol.All(cv.ensure_list, [vol.In(WEEKDAYS)]),
-        vol.Optional(ATTR_LABEL): cv.string,
-        vol.Optional(ATTR_MESSAGE, default=DEFAULT_ALARM_MESSAGE): cv.string,
+        vol.Optional(ATTR_KEY): cv.string,
+        **_ALARM_FIELDS,
+    }
+)
+
+ALARM_UPDATE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ID): cv.string,
+        vol.Optional(ATTR_TIME): cv.string,
+        **_ALARM_FIELDS,
     }
 )
 
@@ -389,16 +424,56 @@ async def _async_handle_watch(call: ServiceCall) -> None:
     await coordinator.watcher.async_add(watch)
 
 
+def _alarm_changes(data: dict) -> dict:
+    """Collect the alarm fields present in a service call."""
+    changes: dict = {}
+    for key in (
+        ATTR_TIME,
+        ATTR_LABEL,
+        ATTR_MESSAGE,
+        ATTR_URGENCY,
+        ATTR_SOUND_MODE,
+        ATTR_SOUND,
+        ATTR_ANNOUNCE,
+        ATTR_VOICE_SNOOZE,
+        ATTR_ROUTINE,
+        ATTR_WORKDAY_ONLY,
+        ATTR_ENABLED,
+    ):
+        if key in data:
+            changes[key] = data[key]
+    if ATTR_DAYS in data:
+        changes[ATTR_DAYS] = list(data[ATTR_DAYS] or [])
+    if raw := data.get(ATTR_VALID_UNTIL):
+        changes[ATTR_VALID_UNTIL] = parse_when(raw)
+    return changes
+
+
 async def _async_handle_alarm_set(call: ServiceCall) -> None:
     """Handle herold.alarm_set."""
     coordinator = _get_coordinator(call.hass)
+    changes = _alarm_changes(call.data)
+    changes.pop(ATTR_TIME, None)
     alarm = Alarm(
         time=call.data[ATTR_TIME],
-        days=list(call.data.get(ATTR_DAYS) or []),
-        label=call.data.get(ATTR_LABEL),
-        message=call.data[ATTR_MESSAGE],
+        key=call.data.get(ATTR_KEY),
+        **changes,
     )
     await coordinator.alarms.async_add(alarm)
+
+
+async def _async_handle_alarm_update(call: ServiceCall) -> None:
+    """Handle herold.alarm_update — the card's editor uses this."""
+    coordinator = _get_coordinator(call.hass)
+    await coordinator.alarms.async_update(
+        call.data[ATTR_ID], _alarm_changes(call.data)
+    )
+
+
+async def _async_handle_alarm_skip_next(call: ServiceCall) -> None:
+    """Handle herold.alarm_skip_next."""
+    coordinator = _get_coordinator(call.hass)
+    await coordinator.alarms.async_skip_next(call.data[ATTR_ID])
 
 
 async def _async_handle_alarm_cancel(call: ServiceCall) -> None:
@@ -450,6 +525,8 @@ _SERVICES = (
     (SERVICE_REMIND_SELF, _async_handle_remind_self, REMIND_SELF_SCHEMA),
     (SERVICE_WATCH, _async_handle_watch, WATCH_SCHEMA),
     (SERVICE_ALARM_SET, _async_handle_alarm_set, ALARM_SET_SCHEMA),
+    (SERVICE_ALARM_UPDATE, _async_handle_alarm_update, ALARM_UPDATE_SCHEMA),
+    (SERVICE_ALARM_SKIP_NEXT, _async_handle_alarm_skip_next, ALARM_ID_SCHEMA),
     (SERVICE_ALARM_CANCEL, _async_handle_alarm_cancel, ALARM_ID_SCHEMA),
     (SERVICE_ALARM_SNOOZE, _async_handle_alarm_snooze, ALARM_SNOOZE_SCHEMA),
     (SERVICE_ALARM_DISMISS, _async_handle_alarm_dismiss, ALARM_DISMISS_SCHEMA),

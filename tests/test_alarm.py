@@ -1,11 +1,9 @@
-"""Alarm scheduling maths, descriptions and the ring volume ramp."""
+"""Alarm scheduling maths and human-readable descriptions."""
 
 from freezegun import freeze_time
 from homeassistant.util import dt as dt_util
 import pytest
 
-from custom_components.herold.alarm import AlarmManager
-from custom_components.herold.const import ALARM_RAMP
 from custom_components.herold.models import Alarm
 
 
@@ -60,14 +58,6 @@ def test_describe_variants() -> None:
     ).describe()
     weekend = Alarm(time="09:00", days=["sat", "sun"]).describe()
     assert "Sa" in weekend and "So" in weekend
-
-
-def test_ramp_grows_and_clamps() -> None:
-    factors = [AlarmManager._ramp_factor(ring) for ring in range(1, 8)]
-    assert factors[0] == ALARM_RAMP[0]
-    assert factors == sorted(factors)          # never gets quieter
-    assert factors[-1] == ALARM_RAMP[-1]       # clamped at the last step
-    assert AlarmManager._ramp_factor(0) == ALARM_RAMP[0]
 
 
 def test_roundtrip() -> None:

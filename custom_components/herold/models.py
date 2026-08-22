@@ -13,6 +13,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     ALARM_STATUS_ARMED,
     DEFAULT_ALARM_MESSAGE,
+    DEFAULT_BUILTIN_SOUND,
     DEFAULT_PRIORITY,
     DEFAULT_PRIORITY_WEIGHT,
     DEFAULT_QUERY_TIMEOUT_MINUTES,
@@ -20,6 +21,10 @@ from .const import (
     LEGACY_DEFAULT_CALLBACK,
     QUERY_MODE_YESNO,
     QUERY_STATUS_PENDING,
+    SNOOZE_SHRINK_FACTORS,
+    SOUND_MODE_BUILTIN,
+    URGENCY_NORMAL,
+    URGENCY_PROFILES,
     VOLUME_LOUD,
     VOLUME_NORMAL,
     VOLUME_QUIET,
@@ -252,6 +257,39 @@ class Alarm:
     next_trigger: datetime | None = None
     rings: int = 0
     created_at: datetime = field(default_factory=dt_util.utcnow)
+    # Idempotency handle so an automation can own an alarm instead of
+    # creating a duplicate every time it runs.
+    key: str | None = None
+    urgency: str = URGENCY_NORMAL
+    sound_mode: str = SOUND_MODE_BUILTIN
+    sound: str | None = DEFAULT_BUILTIN_SOUND
+    announce: bool = True
+    voice_snooze: bool = False
+    routine: str | None = None
+    workday_only: bool = False
+    valid_until: datetime | None = None
+    snoozes: int = 0
+    skip_next: bool = False
+
+    @property
+    def profile(self) -> dict[str, Any]:
+        """Return the urgency profile driving the ring loop."""
+        return URGENCY_PROFILES.get(self.urgency, URGENCY_PROFILES[URGENCY_NORMAL])
+
+    @property
+    def is_expired(self) -> bool:
+        """True if a temporary alarm has outlived its validity."""
+        return self.valid_until is not None and self.valid_until <= dt_util.utcnow()
+
+    def snooze_minutes(self, base: int) -> int | None:
+        """Return the next snooze length, or None when the budget is spent."""
+        profile = self.profile
+        if self.snoozes >= profile["snoozes"]:
+            return None
+        if not profile["snooze_shrink"]:
+            return base
+        index = min(self.snoozes, len(SNOOZE_SHRINK_FACTORS) - 1)
+        return max(1, round(base * SNOOZE_SHRINK_FACTORS[index]))
 
     @property
     def is_repeating(self) -> bool:
@@ -318,6 +356,19 @@ class Alarm:
             ),
             "rings": self.rings,
             "created_at": self.created_at.isoformat(),
+            "key": self.key,
+            "urgency": self.urgency,
+            "sound_mode": self.sound_mode,
+            "sound": self.sound,
+            "announce": self.announce,
+            "voice_snooze": self.voice_snooze,
+            "routine": self.routine,
+            "workday_only": self.workday_only,
+            "valid_until": (
+                self.valid_until.isoformat() if self.valid_until else None
+            ),
+            "snoozes": self.snoozes,
+            "skip_next": self.skip_next,
         }
 
     @classmethod
@@ -334,6 +385,17 @@ class Alarm:
             next_trigger=_parse_datetime(data.get("next_trigger")),
             rings=data.get("rings", 0),
             created_at=_parse_datetime(data.get("created_at")) or dt_util.utcnow(),
+            key=data.get("key"),
+            urgency=data.get("urgency", URGENCY_NORMAL),
+            sound_mode=data.get("sound_mode", SOUND_MODE_BUILTIN),
+            sound=data.get("sound", DEFAULT_BUILTIN_SOUND),
+            announce=data.get("announce", True),
+            voice_snooze=data.get("voice_snooze", False),
+            routine=data.get("routine"),
+            workday_only=data.get("workday_only", False),
+            valid_until=_parse_datetime(data.get("valid_until")),
+            snoozes=data.get("snoozes", 0),
+            skip_next=data.get("skip_next", False),
         )
 
 

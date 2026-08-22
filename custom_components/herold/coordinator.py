@@ -22,6 +22,7 @@ from homeassistant.helpers.event import (
 from homeassistant.util import dt as dt_util
 
 from .alarm import AlarmManager
+from .alarm_output import AlarmOutput
 from .channels import (
     BaseChannel,
     ChannelUnavailable,
@@ -45,13 +46,13 @@ from .const import (
     CONF_EXTERNAL_DND_ENTITY,
     CONF_FALLBACK_TTS,
     CONF_INTERNET_SENSOR,
-    CONF_PRIMARY_TTS,
     CONF_RECIPIENT,
     CONF_ROOMS,
     EVENT_DELIVERED,
     HISTORY_MAX_ENTRIES,
     INTERNAL_RESULT_FAILED,
     P0_RATE_LIMIT_PER_HOUR,
+    PRIORITY_ALARM,
     TODO_STATUS_DONE,
     TODO_STATUS_OPEN,
     signal_delivery,
@@ -103,6 +104,7 @@ class HeroldCoordinator:
         self.scheduler = HeroldScheduler(self)
         self.watcher = HeroldWatcher(self)
         self.alarms = AlarmManager(self)
+        self.alarm_output = AlarmOutput(self)
         self.rate_limiter = RateLimiter(self)
         self.volume = VolumeController(hass)
         self.last_result: DeliveryResult | None = None
@@ -565,83 +567,11 @@ class HeroldCoordinator:
             return active
         return bedroom
 
-    async def async_ring_alarm(
-        self,
-        message: str,
-        ramp: float,
-        priority: int,
-        volume_level: str,
-        flash: bool,
-    ) -> None:
-        """Speak an alarm ring in the sleeping area, bypassing DND rules.
-
-        The alarm deliberately does not go through the dispatcher: it must
-        ignore DND, quiet hours and the rate limiter, and it ramps the
-        configured loud volume up over successive rings.
-        """
-        room = await self.async_get_alarm_room()
-
-        # Explicit alarm outputs win over whatever the room provides.
-        sat_entity = self.config.get(CONF_ALARM_SAT_ENTITY) or (
-            room.sat_entity if room else None
-        )
-        player = self.config.get(CONF_ALARM_MEDIA_PLAYER) or (
-            room.media_player_entity if room else None
-        )
-
-        if sat_entity is None and player is None:
-            _LOGGER.warning(
-                "Alarm ring has no speaker: configure an alarm room or an "
-                "alarm speaker in the options. Falling back to push"
-            )
-            await self._async_alarm_push(message, priority)
-            return
-
-        if flash and room is not None:
-            await self._async_alarm_lights(room)
-
-        base = room.volume_for(volume_level) if room else None
-        volume = round(base * ramp, 3) if base is not None else None
-
-        async with self.volume.announce_at(player, volume):
-            if sat_entity:
-                await self.hass.services.async_call(
-                    "assist_satellite",
-                    "announce",
-                    {"entity_id": sat_entity, "message": message},
-                    blocking=True,
-                )
-            else:
-                await self.hass.services.async_call(
-                    "tts",
-                    "speak",
-                    {
-                        "entity_id": self.config.get(CONF_PRIMARY_TTS),
-                        "media_player_entity_id": player,
-                        "message": message,
-                    },
-                    blocking=True,
-                )
-
-    async def _async_alarm_lights(self, room: Room) -> None:
-        """Fade the room's alarm lights up instead of the P4 red strobe."""
-        for entity_id in room.flash_entities:
-            domain = "scene" if entity_id.startswith("scene.") else "light"
-            data: dict[str, Any] = {"entity_id": entity_id}
-            if domain == "light":
-                data.update({"brightness_pct": 60, "transition": 30})
-            try:
-                await self.hass.services.async_call(
-                    domain, "turn_on", data, blocking=False
-                )
-            except HomeAssistantError as err:
-                _LOGGER.debug("Alarm light %s failed: %s", entity_id, err)
-
-    async def _async_alarm_push(self, message: str, priority: int) -> None:
-        """Last resort so a missing speaker does not swallow the alarm."""
+    async def async_alarm_push(self, message: str) -> None:
+        """Last resort so a missing speaker does not swallow an alarm."""
         try:
             await self.channels[CHANNEL_PUSH].deliver(
-                Notification(message=message, priority=priority), self
+                Notification(message=message, priority=PRIORITY_ALARM), self
             )
         except (ChannelUnavailable, HomeAssistantError) as err:
             _LOGGER.error("Alarm could not be delivered at all: %s", err)

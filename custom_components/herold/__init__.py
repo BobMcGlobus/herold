@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.loader import async_get_integration
 
 from .const import (
-    CARD_FILENAME,
+    CARD_FILENAMES,
     CARD_STATIC_URL,
     CONF_FLASH_ENTITIES,
     CONF_ROOMS,
@@ -67,9 +67,10 @@ async def _async_register_card(hass: HomeAssistant) -> None:
         ]
     )
     integration = await async_get_integration(hass, DOMAIN)
-    add_extra_js_url(
-        hass, f"{CARD_STATIC_URL}/{CARD_FILENAME}?v={integration.version}"
-    )
+    for filename in CARD_FILENAMES:
+        add_extra_js_url(
+            hass, f"{CARD_STATIC_URL}/{filename}?v={integration.version}"
+        )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

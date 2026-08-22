@@ -51,8 +51,10 @@ The config flow walks through nine steps:
 6. **LLM** — conversation agent for P0 self-reminders plus a fallback agent,
    toggles for speakable confirmations and the self-check
 7. **DND** — optional external DND entity, internal DND switch, quiet hours
-8. **Alarm clock** — bed sensor, bedroom, optional alarm speaker, snooze
-   duration and give-up threshold
+8. **Alarm clock** — bed sensor, bedroom, alarm speaker, volume bounds,
+   snooze and give-up settings, getting-up verification, pre-alarm lead
+   times for lights and blinds, good-morning routine, workday and
+   sick-day sensors
 9. **Offline** — offline TTS fallback (opt-in), offline queue (planned)
 
 Every section stays editable through the integration options; rooms and
@@ -90,6 +92,7 @@ templates can be added, edited and removed without re-running setup.
 | State triggers (`herold.watch`, `herold_remind_when`) | ✅ 0.8.0 |
 | Per-room volume levels plus quiet hours | ✅ 0.9.0 |
 | Alarm clock with ramp-up, snooze and automation hooks | ✅ 1.0.0 |
+| Alarm clock: wake sounds, urgency levels, get-up verification, standalone card | ✅ 1.2.0 |
 | Offline queue, multi-user | 🔜 backlog |
 
 The release history lives in [CHANGELOG.md](CHANGELOG.md).
@@ -216,39 +219,72 @@ the LLM keeps reaching for the old calendar workflow instead of
 
 ## Alarm clock
 
-Herold wakes you in the room you are in, using the configured volumes and
-alarm lights:
+Herold wakes you in the room you sleep in, with an actual tone rather than a
+spoken sentence — a TTS line has no attack and no frequency peaks, which is
+exactly why it is easy to sleep through.
 
 ```yaml
 service: herold.alarm_set
 data:
   time: "06:30"
   days: [mon, tue, wed, thu, fri]   # omit for a one-shot alarm
-  label: Arbeit
-  message: Guten Morgen! Zeit aufzustehen.
+  label: Work
+  urgency: insistent                # gentle · normal · insistent
+  workday_only: true                # skip holidays and sick days
+  # key: shift_plan                 # an automation can own this alarm
+  # valid_until: "+7d"              # temporary alarm
 ```
 
-While ringing, the volume ramps up gently across rings (35 % → 100 % of the
-"loud" level), the room's alarm lights fade to 60 % over 30 seconds, and the
-alarm keeps ringing every 45 seconds until dismissed — after five rings it
-gives up. Alarm rings deliberately ignore DND, quiet hours and rate limiting.
+**The card is the comfortable way in.** Add `custom:herold-alarm-card` to a
+dashboard: a list of alarms with big times and toggles, ＋ to create, tap to
+edit — time, weekdays, label, urgency, tone and the workday flag. On iOS the
+time field opens the native wheel.
 
-**Where it rings** (options → alarm clock): occupancy sensors stay quiet
-while you lie still, so Herold needs to know your sleeping area — otherwise a
-morning alarm finds no active room and falls back to a silent push. Configure
-a **bed sensor** and a **bedroom**, and the resolution becomes: in bed → the
-bedroom; already up and moving → the active room; nothing occupied → the
-bedroom anyway. An explicit alarm satellite or speaker overrides all of that.
-`sensor.*_next_alarm` shows the current `target`, and so does the card.
+```yaml
+type: custom:herold-alarm-card
+title: Wecker
+```
 
-**Control:** `herold.alarm_snooze` (default 9 min), `herold.alarm_dismiss`,
-`herold.alarm_cancel`. Without an `id`, snooze and dismiss act on the
-currently ringing alarm. The card has an **⏰** tab with snooze and dismiss
-buttons.
+**Sound** — four tones ship with the integration (chime, beep, siren,
+sunrise; synthesised by `scripts/generate_sounds.py`, so no third-party
+audio licensing). `sound_mode` picks the source: `builtin`, `media` (any
+media id, e.g. an uploaded file), `music_assistant`, or `announce` for the
+old speech-only behaviour. The spoken message is optional and follows the
+tone.
 
-**For automations:** `sensor.*_next_alarm` (timestamp — usable as a trigger),
-`binary_sensor.*_alarm_ringing`, plus the events `herold_alarm_set`,
-`herold_alarm_triggered`, `herold_alarm_snoozed`, `herold_alarm_dismissed`.
+**Urgency** decides how stubborn it is:
+
+| Level | Interval | Gives up after | Snoozes |
+|---|---|---|---|
+| gentle | 90 s | 3 rings | unlimited |
+| normal | 45 s | 6 rings | 3 |
+| insistent | 25 s | 15 rings | 1, then refused |
+
+**Volume** stays between a configurable floor and ceiling (options → alarm
+clock). Ring one starts at the floor and climbs towards the ceiling as the
+alarm is ignored — a speaker left quiet overnight cannot swallow it.
+
+**Getting up is verified**: a dismiss while the bed sensor still reports
+occupancy counts as a reflex, and after a grace period the alarm resumes.
+Turn it off in the options if that is too strict.
+
+**Before the sound**, lights fade up (default 20 minutes early) and blinds
+open (default 5 minutes early) — both times configurable, `0` disables the
+stage. The **good-morning routine** (a script or scene) runs once you really
+got up, not on the first snooze.
+
+**Work alarms** flagged `workday_only` are skipped when the configured
+workday sensor is off or the sick-day toggle is on. One-off and holiday
+alarms ring regardless — that is usually the point of setting them.
+
+**Control:** `herold.alarm_snooze`, `herold.alarm_dismiss`,
+`herold.alarm_update`, `herold.alarm_skip_next`, `herold.alarm_cancel`.
+Without an `id`, snooze and dismiss act on the ringing alarm.
+
+**For automations:** `sensor.*_next_alarm` (timestamp, plus `target` and
+`in_bed`), `binary_sensor.*_alarm_ringing`, and the events
+`herold_alarm_set`, `herold_alarm_triggered`, `herold_alarm_snoozed`,
+`herold_alarm_dismissed`, `herold_alarm_skipped`, `herold_alarm_pre`.
 
 ## Volume and quiet hours
 

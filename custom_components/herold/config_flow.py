@@ -29,11 +29,22 @@ import voluptuous as vol
 
 from .const import (
     CONF_ALARM_BED_SENSOR,
+    CONF_ALARM_COVER_ENTITIES,
+    CONF_ALARM_COVER_LEAD_MINUTES,
+    CONF_ALARM_COVER_POSITION,
+    CONF_ALARM_LIGHT_LEAD_MINUTES,
     CONF_ALARM_MAX_RINGS,
     CONF_ALARM_MEDIA_PLAYER,
     CONF_ALARM_ROOM,
+    CONF_ALARM_ROUTINE,
     CONF_ALARM_SAT_ENTITY,
+    CONF_ALARM_SICK_ENTITY,
     CONF_ALARM_SNOOZE_MINUTES,
+    CONF_ALARM_VERIFY_DISMISS,
+    CONF_ALARM_VERIFY_SECONDS,
+    CONF_ALARM_VOLUME_MAX,
+    CONF_ALARM_VOLUME_MIN,
+    CONF_ALARM_WORKDAY_SENSOR,
     CONF_CREATE_INTERNAL_SWITCH,
     CONF_ENABLE_OFFLINE_FALLBACK,
     CONF_ENABLE_OFFLINE_QUEUE,
@@ -63,8 +74,15 @@ from .const import (
     CONF_VOLUME_LOUD,
     CONF_VOLUME_NORMAL,
     CONF_VOLUME_QUIET,
+    DEFAULT_ALARM_COVER_LEAD_MINUTES,
+    DEFAULT_ALARM_COVER_POSITION,
+    DEFAULT_ALARM_LIGHT_LEAD_MINUTES,
     DEFAULT_ALARM_MAX_RINGS,
     DEFAULT_ALARM_SNOOZE_MINUTES,
+    DEFAULT_ALARM_VERIFY_DISMISS,
+    DEFAULT_ALARM_VERIFY_SECONDS,
+    DEFAULT_ALARM_VOLUME_MAX,
+    DEFAULT_ALARM_VOLUME_MIN,
     DEFAULT_CREATE_INTERNAL_SWITCH,
     DEFAULT_ENABLE_OFFLINE_FALLBACK,
     DEFAULT_ENABLE_OFFLINE_QUEUE,
@@ -222,12 +240,22 @@ def build_alarm_schema(rooms: list[dict[str, Any]]) -> vol.Schema:
         )
     schema.update(
         {
-            vol.Optional(CONF_ALARM_SAT_ENTITY): EntitySelector(
-                EntitySelectorConfig(domain="assist_satellite")
-            ),
             vol.Optional(CONF_ALARM_MEDIA_PLAYER): EntitySelector(
                 EntitySelectorConfig(domain="media_player")
             ),
+            vol.Optional(CONF_ALARM_SAT_ENTITY): EntitySelector(
+                EntitySelectorConfig(domain="assist_satellite")
+            ),
+            # Absolute bounds — a speaker left quiet overnight must not
+            # swallow the alarm, and it may climb if it is ignored.
+            vol.Required(
+                CONF_ALARM_VOLUME_MIN,
+                default=int(DEFAULT_ALARM_VOLUME_MIN * 100),
+            ): _VOLUME_SELECTOR,
+            vol.Required(
+                CONF_ALARM_VOLUME_MAX,
+                default=int(DEFAULT_ALARM_VOLUME_MAX * 100),
+            ): _VOLUME_SELECTOR,
             vol.Required(
                 CONF_ALARM_SNOOZE_MINUTES, default=DEFAULT_ALARM_SNOOZE_MINUTES
             ): NumberSelector(
@@ -242,6 +270,50 @@ def build_alarm_schema(rooms: list[dict[str, Any]]) -> vol.Schema:
                     min=1, max=20, step=1, mode=NumberSelectorMode.BOX
                 )
             ),
+            vol.Required(
+                CONF_ALARM_VERIFY_DISMISS,
+                default=DEFAULT_ALARM_VERIFY_DISMISS,
+            ): BooleanSelector(),
+            vol.Required(
+                CONF_ALARM_VERIFY_SECONDS,
+                default=DEFAULT_ALARM_VERIFY_SECONDS,
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=15, max=600, step=5, mode=NumberSelectorMode.BOX
+                )
+            ),
+            vol.Required(
+                CONF_ALARM_LIGHT_LEAD_MINUTES,
+                default=DEFAULT_ALARM_LIGHT_LEAD_MINUTES,
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=0, max=120, step=1, mode=NumberSelectorMode.BOX
+                )
+            ),
+            vol.Optional(CONF_ALARM_COVER_ENTITIES, default=[]): EntitySelector(
+                EntitySelectorConfig(domain="cover", multiple=True)
+            ),
+            vol.Required(
+                CONF_ALARM_COVER_LEAD_MINUTES,
+                default=DEFAULT_ALARM_COVER_LEAD_MINUTES,
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=0, max=60, step=1, mode=NumberSelectorMode.BOX
+                )
+            ),
+            vol.Required(
+                CONF_ALARM_COVER_POSITION,
+                default=DEFAULT_ALARM_COVER_POSITION,
+            ): _VOLUME_SELECTOR,
+            vol.Optional(CONF_ALARM_ROUTINE): EntitySelector(
+                EntitySelectorConfig(domain=["script", "scene", "automation"])
+            ),
+            vol.Optional(CONF_ALARM_WORKDAY_SENSOR): EntitySelector(
+                EntitySelectorConfig(domain="binary_sensor")
+            ),
+            vol.Optional(CONF_ALARM_SICK_ENTITY): EntitySelector(
+                EntitySelectorConfig(domain=["input_boolean", "binary_sensor"])
+            ),
         }
     )
     return vol.Schema(schema)
@@ -252,9 +324,23 @@ ALARM_KEYS = (
     CONF_ALARM_ROOM,
     CONF_ALARM_SAT_ENTITY,
     CONF_ALARM_MEDIA_PLAYER,
+    CONF_ALARM_VOLUME_MIN,
+    CONF_ALARM_VOLUME_MAX,
     CONF_ALARM_SNOOZE_MINUTES,
     CONF_ALARM_MAX_RINGS,
+    CONF_ALARM_VERIFY_DISMISS,
+    CONF_ALARM_VERIFY_SECONDS,
+    CONF_ALARM_LIGHT_LEAD_MINUTES,
+    CONF_ALARM_COVER_ENTITIES,
+    CONF_ALARM_COVER_LEAD_MINUTES,
+    CONF_ALARM_COVER_POSITION,
+    CONF_ALARM_ROUTINE,
+    CONF_ALARM_WORKDAY_SENSOR,
+    CONF_ALARM_SICK_ENTITY,
 )
+
+# Volumes are stored as 0..1 fractions but shown as percent.
+ALARM_PERCENT_KEYS = (CONF_ALARM_VOLUME_MIN, CONF_ALARM_VOLUME_MAX)
 
 BASIC_KEYS = (CONF_RECIPIENT, CONF_INTEGRATION_NAME)
 VOICE_KEYS = (CONF_PRIMARY_TTS, CONF_FALLBACK_TTS, CONF_INTERNET_SENSOR)
@@ -313,6 +399,27 @@ def _level_to_percent(value: Any) -> float | None:
     if value in (None, ""):
         return None
     return round(float(value) * 100)
+
+
+def _alarm_from_form(user_input: dict[str, Any]) -> dict[str, Any]:
+    """Store alarm volumes as 0..1 fractions; the form shows percent."""
+    data = dict(user_input)
+    for key in ALARM_PERCENT_KEYS:
+        if key in data:
+            data[key] = _percent_to_level(data[key])
+    return data
+
+
+def _alarm_form_values(config: dict[str, Any]) -> dict[str, Any]:
+    """Prefill the alarm form, converting fractions back to percent."""
+    values = {key: config[key] for key in ALARM_KEYS if key in config}
+    for key in ALARM_PERCENT_KEYS:
+        percent = _level_to_percent(values.get(key))
+        if percent is None:
+            values.pop(key, None)
+        else:
+            values[key] = percent
+    return values
 
 
 def _room_form_values(room: dict[str, Any]) -> dict[str, Any]:
@@ -443,7 +550,7 @@ class HeroldConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle the alarm clock step."""
         if user_input is not None:
-            self._data.update(user_input)
+            self._data.update(_alarm_from_form(user_input))
             return await self.async_step_offline()
         return self.async_show_form(
             step_id="alarm", data_schema=build_alarm_schema(self._rooms)
@@ -572,11 +679,20 @@ class HeroldOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Edit the alarm clock section."""
-        return self._async_step_section(
-            "alarm",
-            build_alarm_schema(self._current.get(CONF_ROOMS, [])),
-            ALARM_KEYS,
-            user_input,
+        schema = build_alarm_schema(self._current.get(CONF_ROOMS, []))
+        if user_input is not None:
+            values = _alarm_from_form(user_input)
+            for key in ALARM_KEYS:
+                if key in values:
+                    self._current[key] = values[key]
+                else:
+                    self._current.pop(key, None)
+            return self.async_create_entry(title="", data=self._current)
+        return self.async_show_form(
+            step_id="alarm",
+            data_schema=self.add_suggested_values_to_schema(
+                schema, _alarm_form_values(self._current)
+            ),
         )
 
     async def async_step_offline(

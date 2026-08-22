@@ -360,6 +360,8 @@ class HeroldNextAlarmSensor(HeroldSignalSensor):
             # when an alarm stays silent.
             "target": self.coordinator.describe_alarm_target(),
             "in_bed": self.coordinator.in_bed,
+            # The card needs disabled alarms too, so it can render the
+            # toggle in its off position.
             "alarms": [
                 {
                     "id": alarm.id,
@@ -367,13 +369,23 @@ class HeroldNextAlarmSensor(HeroldSignalSensor):
                     "days": alarm.days,
                     "label": alarm.label,
                     "status": alarm.status,
+                    "enabled": alarm.enabled,
                     "schedule": alarm.describe(),
+                    "urgency": alarm.urgency,
+                    "sound_mode": alarm.sound_mode,
+                    "sound": alarm.sound,
+                    "announce": alarm.announce,
+                    "voice_snooze": alarm.voice_snooze,
+                    "workday_only": alarm.workday_only,
+                    "skip_next": alarm.skip_next,
+                    "blocked": manager.is_blocked(alarm),
+                    "key": alarm.key,
                     "next_trigger": (
                         alarm.next_trigger.isoformat()
                         if alarm.next_trigger
                         else None
                     ),
                 }
-                for alarm in manager.active
+                for alarm in manager.all_alarms
             ],
         }

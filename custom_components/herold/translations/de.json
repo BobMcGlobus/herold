@@ -81,14 +81,25 @@
       },
       "alarm": {
         "title": "Wecker",
-        "description": "Präsenzsensoren melden nichts, während du ruhig liegst — sag Herold daher, wo du schläfst. Sonst findet ein Morgenwecker keinen aktiven Raum und fällt auf eine stille Push-Nachricht zurück.",
+        "description": "Präsenzsensoren melden nichts, während du ruhig liegst — sag Herold daher, wo du schläfst. Der Lautsprecher wird dem Satelliten vorgezogen, weil nur er einen Weckton abspielen kann. Licht kommt früh, Rolladen erst kurz vorher — ein offener Rolladen ist deutlich härter als eine gedimmte Lampe.",
         "data": {
           "alarm_bed_sensor": "Bett-Sensor (im Bett)",
           "alarm_room": "Schlafzimmer (gilt, solange du im Bett bist)",
-          "alarm_sat_entity": "Wecker-Satellit (überschreibt den Raum)",
-          "alarm_media_player_entity": "Wecker-Lautsprecher (überschreibt den Raum)",
+          "alarm_media_player_entity": "Wecker-Lautsprecher (bevorzugt — spielt den Ton)",
+          "alarm_sat_entity": "Wecker-Satellit (nur für Sprach-Schlummern)",
+          "alarm_volume_min": "Mindestlautstärke (%)",
+          "alarm_volume_max": "Höchstlautstärke beim Ignorieren (%)",
           "alarm_snooze_minutes": "Schlummerdauer (Minuten)",
-          "alarm_max_rings": "Aufgeben nach so vielen Durchgängen"
+          "alarm_max_rings": "Aufgeben nach so vielen Durchgängen",
+          "alarm_verify_dismiss": "Erst aus, wenn du wirklich aufstehst",
+          "alarm_verify_seconds": "Karenzzeit für diese Prüfung (Sekunden)",
+          "alarm_light_lead_minutes": "Licht so viele Minuten vorher starten",
+          "alarm_cover_entities": "Rolladen zum Öffnen",
+          "alarm_cover_lead_minutes": "Rolladen so viele Minuten vorher öffnen",
+          "alarm_cover_position": "Rolladen-Position (%)",
+          "alarm_routine": "Guten-Morgen-Routine (läuft nach dem Aufstehen)",
+          "alarm_workday_sensor": "Arbeitstag-Sensor",
+          "alarm_sick_entity": "Krankheits-Schalter"
         }
       }
     },
@@ -266,10 +277,21 @@
         "data": {
           "alarm_bed_sensor": "Bett-Sensor (im Bett)",
           "alarm_room": "Schlafzimmer (gilt, solange du im Bett bist)",
-          "alarm_sat_entity": "Wecker-Satellit (überschreibt den Raum)",
-          "alarm_media_player_entity": "Wecker-Lautsprecher (überschreibt den Raum)",
+          "alarm_media_player_entity": "Wecker-Lautsprecher (bevorzugt — spielt den Ton)",
+          "alarm_sat_entity": "Wecker-Satellit (nur für Sprach-Schlummern)",
+          "alarm_volume_min": "Mindestlautstärke (%)",
+          "alarm_volume_max": "Höchstlautstärke beim Ignorieren (%)",
           "alarm_snooze_minutes": "Schlummerdauer (Minuten)",
-          "alarm_max_rings": "Aufgeben nach so vielen Durchgängen"
+          "alarm_max_rings": "Aufgeben nach so vielen Durchgängen",
+          "alarm_verify_dismiss": "Erst aus, wenn du wirklich aufstehst",
+          "alarm_verify_seconds": "Karenzzeit für diese Prüfung (Sekunden)",
+          "alarm_light_lead_minutes": "Licht so viele Minuten vorher starten",
+          "alarm_cover_entities": "Rolladen zum Öffnen",
+          "alarm_cover_lead_minutes": "Rolladen so viele Minuten vorher öffnen",
+          "alarm_cover_position": "Rolladen-Position (%)",
+          "alarm_routine": "Guten-Morgen-Routine (läuft nach dem Aufstehen)",
+          "alarm_workday_sensor": "Arbeitstag-Sensor",
+          "alarm_sick_entity": "Krankheits-Schalter"
         }
       }
     },
@@ -648,6 +670,26 @@
         "id": {
           "name": "Wecker-ID",
           "description": "Standard ist der aktuell klingelnde Wecker."
+        }
+      }
+    },
+    "alarm_update": {
+      "name": "Wecker ändern",
+      "description": "Ändert einen bestehenden Wecker — der Karten-Editor nutzt das.",
+      "fields": {
+        "id": {
+          "name": "Wecker-ID",
+          "description": "Der zu ändernde Wecker."
+        }
+      }
+    },
+    "alarm_skip_next": {
+      "name": "Nächsten Wecker überspringen",
+      "description": "Überspringt eine Wiederholung, ohne den Wecker zu löschen.",
+      "fields": {
+        "id": {
+          "name": "Wecker-ID",
+          "description": "Der einmalig zu überspringende Wecker."
         }
       }
     }

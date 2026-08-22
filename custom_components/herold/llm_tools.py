@@ -26,6 +26,8 @@ from .const import (
     MAX_WATCH_TTL_HOURS,
     PRIORITY_INTERNAL,
     TODO_STATUS_OPEN,
+    URGENCY_LEVELS,
+    URGENCY_NORMAL,
     WEEKDAYS,
 )
 from .entity_resolver import normalize_trigger, resolve_entity
@@ -474,8 +476,11 @@ class ListAlarmsTool(HeroldTool):
                     "schedule": alarm.describe(),
                     "label": alarm.label,
                     "status": alarm.status,
+                    "enabled": alarm.enabled,
+                    "urgency": alarm.urgency,
+                    "workday_only": alarm.workday_only,
                 }
-                for alarm in self.coordinator.alarms.active
+                for alarm in self.coordinator.alarms.all_alarms
             ]
         }
 
@@ -499,6 +504,8 @@ class SetAlarmTool(HeroldTool):
             vol.Optional("days"): [str],
             vol.Optional("label"): str,
             vol.Optional("message"): str,
+            vol.Optional("urgency"): vol.In(URGENCY_LEVELS),
+            vol.Optional("workday_only"): bool,
         }
     )
 
@@ -516,6 +523,8 @@ class SetAlarmTool(HeroldTool):
             days=days,
             label=kwargs.get("label"),
             message=kwargs.get("message") or DEFAULT_ALARM_MESSAGE,
+            urgency=kwargs.get("urgency", URGENCY_NORMAL),
+            workday_only=bool(kwargs.get("workday_only", False)),
         )
         await self.coordinator.alarms.async_add(alarm)
         return self._confirm(
