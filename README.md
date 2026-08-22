@@ -236,14 +236,35 @@ data:
 ```
 
 **The card is the comfortable way in.** Add `custom:herold-alarm-card` to a
-dashboard: a list of alarms with big times and toggles, ＋ to create, tap to
-edit — time, weekdays, label, urgency, tone and the workday flag. On iOS the
-time field opens the native wheel.
+dashboard: alarms as tiles with big times, weekday strip, status badges and a
+toggle. ＋ creates one, tapping a tile opens its **settings sheet** — time,
+repeat (with Weekdays / Weekend / Daily presets), label, urgency, sound
+source with an audition button, the spoken message, workday and voice-snooze
+flags, and under "more settings" the good-morning routine and an expiry date.
+On iOS the time field opens the native wheel.
 
 ```yaml
 type: custom:herold-alarm-card
 title: Wecker
+card_style: glass    # default · glass · material · bubble · mirror
+columns: 2
 ```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `title` / `subtitle` | string | – | Heading |
+| `entity` | string | auto | The alarm sensor; found automatically |
+| `card_style` | string | `default` | `default`, `glass`, `material`, `bubble`, `mirror` |
+| `layout` | string | `grid` | `grid` or `carousel` |
+| `columns` | number | `1` | Tile columns (1–3) |
+| `tiles` | boolean | `true` | `false` renders flat rows instead of tiles |
+| `background` | boolean | `true` | `false` removes the card background and shadow |
+| `flush` | boolean | `false` | `true` removes the outer padding |
+
+The styles and their tokens are the ones the
+[Weatherglass](https://github.com/BobMcGlobus/Weatherglass) card uses, so the
+two match on a shared dashboard. Everything is editable in the visual card
+editor.
 
 **Sound** — four tones ship with the integration (chime, beep, siren,
 sunrise; synthesised by `scripts/generate_sounds.py`, so no third-party

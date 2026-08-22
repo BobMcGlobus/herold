@@ -62,6 +62,19 @@ def _normalize(text: object) -> str:
     return re.sub(r"[^a-z0-9]+", " ", lowered).strip()
 
 
+def friendly_name(hass: HomeAssistant, entity_id: str) -> str:
+    """Return an entity's display name, falling back to the entity id.
+
+    Used wherever a raw entity id would otherwise reach the user — the alarm
+    card shows where a ring would go, and "Schlafzimmer Speaker" says more
+    than "media_player.sz_speaker".
+    """
+    state = hass.states.get(entity_id)
+    if state is None:
+        return entity_id
+    return _as_text(state.attributes.get("friendly_name")) or entity_id
+
+
 def _score(query: str, tokens: set[str], candidate: str) -> float:
     """Similarity of a candidate label to the query (0..1)."""
     normalized = _normalize(candidate)

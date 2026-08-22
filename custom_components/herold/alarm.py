@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.const import STATE_ON
 from homeassistant.core import callback
@@ -41,6 +41,7 @@ from .const import (
     CONF_ALARM_WORKDAY_SENSOR,
     DEFAULT_ALARM_COVER_LEAD_MINUTES,
     DEFAULT_ALARM_LIGHT_LEAD_MINUTES,
+    DEFAULT_ALARM_MESSAGE,
     DEFAULT_ALARM_SNOOZE_MINUTES,
     DEFAULT_ALARM_VERIFY_DISMISS,
     DEFAULT_ALARM_VERIFY_SECONDS,
@@ -61,6 +62,12 @@ if TYPE_CHECKING:
     from .coordinator import HeroldCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+
+# Optional alarm fields the editor may empty out again.
+_CLEARABLE_ALARM_FIELDS: Final = frozenset(
+    {"label", "key", "routine", "sound", "valid_until"}
+)
 
 
 class AlarmManager:
@@ -180,8 +187,19 @@ class AlarmManager:
         if alarm is None:
             raise HomeAssistantError(f"Unknown alarm id: {alarm_id}")
         for name, value in changes.items():
-            if value is not None and hasattr(alarm, name):
-                setattr(alarm, name, value)
+            if value is None or not hasattr(alarm, name):
+                continue
+            # The card sends "" for an optional field the user emptied —
+            # without this, a routine or an expiry could never be removed
+            # again, only replaced.
+            if value == "":
+                if name in _CLEARABLE_ALARM_FIELDS:
+                    value = None
+                elif name == "message":
+                    # An emptied wake message means "use the default again",
+                    # not "wake me in silence".
+                    value = DEFAULT_ALARM_MESSAGE
+            setattr(alarm, name, value)
         if alarm.next_occurrence() is None:
             raise HomeAssistantError(
                 f"Alarm time {alarm.time!r} is not a valid time of day"

@@ -5,15 +5,23 @@
  *
  *   type: custom:herold-alarm-card
  *   title: Wecker
+ *   card_style: glass        # default | glass | material | bubble | mirror
+ *   columns: 2
  *   entity: sensor.herold_naechster_wecker   # optional, auto-detected
  *
  * The list is deliberately Apple-shaped: big time, label underneath, a
- * toggle on the right, tap to edit. The time field is a native
+ * toggle on the right, tap to open the settings. The time field is a native
  * <input type="time">, which on iOS renders the system wheel — a hand-built
  * drum would be a lot of code for a worse result.
+ *
+ * The visual language (card styles, tile tokens, the detail dialog) follows
+ * the Weatherglass card so both can sit on one dashboard without looking
+ * like they came from different houses.
  */
 
 (() => {
+  const CARD_STYLES = ["default", "glass", "material", "bubble", "mirror"];
+
   const DAYS = [
     ["mon", "Mo"],
     ["tue", "Di"],
@@ -24,10 +32,30 @@
     ["sun", "So"],
   ];
 
+  const DAY_PRESETS = [
+    ["Werktags", ["mon", "tue", "wed", "thu", "fri"]],
+    ["Wochenende", ["sat", "sun"]],
+    ["Täglich", ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]],
+    ["Einmalig", []],
+  ];
+
   const URGENCY = [
-    ["gentle", "Sanft"],
-    ["normal", "Normal"],
-    ["insistent", "Hartnäckig"],
+    ["gentle", "Sanft", "mdi:weather-sunset-up"],
+    ["normal", "Normal", "mdi:alarm"],
+    ["insistent", "Hartnäckig", "mdi:alarm-light"],
+  ];
+
+  const URGENCY_HINT = {
+    gentle: "Leise, weite Abstände, gibt schnell auf — 5 Snoozes.",
+    normal: "Ausgewogen: alle 45 s, 3 Snoozes.",
+    insistent: "Laut und dicht, ein einziger kurzer Snooze.",
+  };
+
+  const SOUND_MODES = [
+    ["builtin", "Weckton"],
+    ["media", "Medien-URL"],
+    ["music_assistant", "Music Assistant"],
+    ["announce", "Nur Ansage"],
   ];
 
   const SOUNDS = [
@@ -36,6 +64,14 @@
     ["siren", "Sirene"],
     ["sunrise", "Sonnenaufgang"],
   ];
+
+  const ACCENTS = {
+    gentle: "var(--info-color, #4fc3f7)",
+    normal: "var(--primary-color, #03a9f4)",
+    insistent: "var(--warning-color, #ff9800)",
+  };
+
+  const SOUND_BASE = "/herold_static/sounds";
 
   const esc = (value) =>
     String(value ?? "").replace(
@@ -54,9 +90,33 @@
     if (diff < 86400) {
       const hours = Math.floor(diff / 3600);
       const mins = Math.round((diff % 3600) / 60);
-      return `in ${hours} h ${mins} min`;
+      return mins ? `in ${hours} h ${mins} min` : `in ${hours} h`;
     }
     return `in ${Math.round(diff / 86400)} Tagen`;
+  };
+
+  const fmtDate = (iso) => {
+    if (!iso) return "";
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  /** ISO -> the "YYYY-MM-DDTHH:MM" an <input type="datetime-local"> wants. */
+  const toLocalInput = (iso) => {
+    if (!iso) return "";
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "";
+    const pad = (n) => String(n).padStart(2, "0");
+    return (
+      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-` +
+      `${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+    );
   };
 
   class HeroldAlarmCard extends HTMLElement {
@@ -65,17 +125,25 @@
       this.attachShadow({ mode: "open" });
       this._editing = null; // alarm id, or "new"
       this._draft = null;
+      this._advanced = false;
+      this._popupFresh = false;
       this._fingerprint = null;
       this.shadowRoot.addEventListener("click", (event) => this._onClick(event));
-      this.shadowRoot.addEventListener("change", (event) => this._onChange(event));
+      this.shadowRoot.addEventListener("input", (event) => this._onInput(event));
+      this.shadowRoot.addEventListener("change", (event) => this._onInput(event));
     }
 
     static getStubConfig() {
       return { title: "Wecker" };
     }
 
+    static getConfigElement() {
+      return document.createElement("herold-alarm-card-editor");
+    }
+
     setConfig(config) {
       this._config = config || {};
+      this._fingerprint = null;
     }
 
     getCardSize() {
@@ -84,11 +152,13 @@
 
     set hass(hass) {
       this._hass = hass;
+      // Never repaint underneath an open dialog: it would throw away the
+      // cursor position in whatever field is being typed into.
+      if (this._editing) return;
       const entity = this._entity();
       const stamp = entity ? hass.states[entity]?.last_updated : null;
-      const fingerprint = [stamp, this._editing].join("|");
-      if (fingerprint !== this._fingerprint) {
-        this._fingerprint = fingerprint;
+      if (stamp !== this._fingerprint) {
+        this._fingerprint = stamp;
         this._render();
       }
     }
@@ -117,61 +187,116 @@
       return this._meta().alarms || [];
     }
 
+    _cardStyle() {
+      const style = this._config.card_style || "default";
+      return CARD_STYLES.includes(style) ? style : "default";
+    }
+
+    /** Scripts and scenes the good-morning routine can pick from. */
+    _routines() {
+      return Object.keys(this._hass.states)
+        .filter((id) => id.startsWith("script.") || id.startsWith("scene."))
+        .map((id) => [
+          id,
+          this._hass.states[id].attributes.friendly_name || id,
+        ])
+        .sort((a, b) => String(a[1]).localeCompare(String(b[1]), "de"));
+    }
+
     // -- Interaction -------------------------------------------------------
+
+    _openEditor(alarm) {
+      this._draft = alarm
+        ? {
+            time: alarm.time,
+            days: [...(alarm.days || [])],
+            label: alarm.label || "",
+            message: alarm.message || "",
+            urgency: alarm.urgency || "normal",
+            sound_mode: alarm.sound_mode || "builtin",
+            sound: alarm.sound || "chime",
+            announce: alarm.announce !== false,
+            workday_only: !!alarm.workday_only,
+            voice_snooze: !!alarm.voice_snooze,
+            routine: alarm.routine || "",
+            valid_until: toLocalInput(alarm.valid_until),
+            skip_next: !!alarm.skip_next,
+            repeating: (alarm.days || []).length > 0,
+          }
+        : {
+            time: "07:00",
+            days: [],
+            label: "",
+            message: "",
+            urgency: "normal",
+            sound_mode: "builtin",
+            sound: "chime",
+            announce: true,
+            workday_only: false,
+            voice_snooze: false,
+            routine: "",
+            valid_until: "",
+            skip_next: false,
+            repeating: false,
+          };
+      this._editing = alarm ? alarm.id : "new";
+      this._advanced = false;
+      this._popupFresh = true;
+    }
+
+    _closeEditor() {
+      this._editing = null;
+      this._draft = null;
+      this._fingerprint = null;
+    }
 
     _onClick(event) {
       const el = event.target.closest("[data-action]");
       if (!el) return;
       const { action, id, value } = el.dataset;
+      const draft = this._draft;
 
       if (action === "new") {
-        this._editing = "new";
-        this._draft = {
-          time: "07:00",
-          days: [],
-          label: "",
-          urgency: "normal",
-          sound_mode: "builtin",
-          sound: "chime",
-          announce: true,
-          workday_only: false,
-          voice_snooze: false,
-        };
+        this._openEditor(null);
       } else if (action === "edit") {
         const alarm = this._alarms().find((item) => item.id === id);
         if (!alarm) return;
-        this._editing = id;
-        this._draft = {
-          time: alarm.time,
-          days: [...(alarm.days || [])],
-          label: alarm.label || "",
-          urgency: alarm.urgency || "normal",
-          sound_mode: alarm.sound_mode || "builtin",
-          sound: alarm.sound || "chime",
-          announce: alarm.announce !== false,
-          workday_only: !!alarm.workday_only,
-          voice_snooze: !!alarm.voice_snooze,
-        };
-      } else if (action === "cancel-edit") {
-        this._editing = null;
-        this._draft = null;
+        this._openEditor(alarm);
+      } else if (action === "close") {
+        // The backdrop itself closes the sheet; a click that merely bubbled
+        // up from inside it must not.
+        if (el.classList.contains("backdrop") && event.target !== el) return;
+        this._closeEditor();
       } else if (action === "day") {
-        const days = this._draft.days;
-        const index = days.indexOf(value);
-        if (index >= 0) days.splice(index, 1);
-        else days.push(value);
+        const index = draft.days.indexOf(value);
+        if (index >= 0) draft.days.splice(index, 1);
+        else draft.days.push(value);
+      } else if (action === "preset") {
+        draft.days = [...DAY_PRESETS[Number(value)][1]];
       } else if (action === "urgency") {
-        this._draft.urgency = value;
+        draft.urgency = value;
+      } else if (action === "sound-mode") {
+        draft.sound_mode = value;
+        if (value === "builtin" && !SOUNDS.some(([key]) => key === draft.sound)) {
+          draft.sound = "chime";
+        }
+        if (value === "announce") draft.announce = true;
       } else if (action === "sound") {
-        this._draft.sound = value;
-        this._draft.sound_mode = "builtin";
+        draft.sound = value;
+        this._preview(value);
+      } else if (action === "preview") {
+        this._preview(draft.sound);
+        return;
+      } else if (action === "advanced") {
+        this._advanced = !this._advanced;
       } else if (action === "save") {
         this._save();
         return;
       } else if (action === "delete") {
         this._call("alarm_cancel", { id });
-        this._editing = null;
-        this._draft = null;
+        this._closeEditor();
+        this._render();
+        return;
       } else if (action === "toggle") {
         const alarm = this._alarms().find((item) => item.id === id);
         this._call("alarm_update", { id, enabled: alarm?.enabled === false });
@@ -184,18 +309,39 @@
         return;
       } else if (action === "skip") {
         this._call("alarm_skip_next", { id });
+        this._closeEditor();
+        this._render();
+        return;
+      } else {
         return;
       }
-      this._fingerprint = null;
-      this._render();
+
+      if (this._editing) this._renderPopup();
+      else this._render();
     }
 
-    _onChange(event) {
+    _onInput(event) {
       const el = event.target.closest("[data-field]");
       if (!el || !this._draft) return;
       const field = el.dataset.field;
-      this._draft[field] =
-        el.type === "checkbox" ? el.checked : el.value;
+      const before = this._draft[field];
+      this._draft[field] = el.type === "checkbox" ? el.checked : el.value;
+      // Checkboxes and selects change what the rest of the form should show;
+      // free text must never trigger a repaint or the caret jumps.
+      if (el.type === "checkbox" && before !== this._draft[field]) {
+        this._renderPopup();
+      }
+    }
+
+    _preview(sound) {
+      if (this._draft?.sound_mode !== "builtin") return;
+      if (!SOUNDS.some(([key]) => key === sound)) return;
+      this._audio?.pause();
+      this._audio = new Audio(`${SOUND_BASE}/${sound}.wav`);
+      this._audio.volume = 0.5;
+      this._audio.play().catch(() => {
+        /* autoplay policy, nothing to do about it */
+      });
     }
 
     _save() {
@@ -204,21 +350,22 @@
         time: draft.time,
         days: draft.days,
         label: draft.label,
+        message: draft.message,
         urgency: draft.urgency,
         sound_mode: draft.sound_mode,
-        sound: draft.sound,
+        sound: draft.sound_mode === "announce" ? "" : draft.sound,
         announce: !!draft.announce,
         workday_only: !!draft.workday_only,
         voice_snooze: !!draft.voice_snooze,
+        routine: draft.routine,
+        valid_until: draft.valid_until,
       };
       if (this._editing === "new") {
         this._call("alarm_set", payload);
       } else {
         this._call("alarm_update", { id: this._editing, ...payload });
       }
-      this._editing = null;
-      this._draft = null;
-      this._fingerprint = null;
+      this._closeEditor();
       this._render();
     }
 
@@ -230,202 +377,347 @@
 
     _render() {
       if (!this._hass) return;
-      const title = esc(this._config.title || "Wecker");
-      const meta = this._meta();
-      const body = this._entity()
-        ? this._editing
-          ? this._renderEditor()
-          : this._renderList(meta)
-        : '<div class="empty">Kein Herold-Wecker-Sensor gefunden.</div>';
+      const config = this._config;
+      const classes = [
+        "cardroot",
+        `s-${this._cardStyle()}`,
+        config.tiles === false ? "flat" : "tiles",
+        config.background === false ? "nobg" : "",
+        config.flush ? "flush" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const columns = Math.min(3, Math.max(1, Number(config.columns) || 1));
 
       this.shadowRoot.innerHTML = `
-        <style>
-          ha-card { padding: 12px 8px 8px; }
-          .head { display: flex; align-items: center; gap: 8px;
-            padding: 0 8px 8px; }
-          .head .title { flex: 1; font-size: 1.3em; font-weight: 600; }
-          .add { border: none; background: none; cursor: pointer;
-            font-size: 1.6em; line-height: 1; color: var(--primary-color); }
-          .row { display: flex; align-items: center; gap: 12px;
-            padding: 10px 8px; border-bottom: 1px solid var(--divider-color); }
-          .row:last-child { border-bottom: none; }
-          .row.ringing { background: var(--error-color, #ef5350);
-            border-radius: 12px; color: #fff; }
-          .row .main { flex: 1; min-width: 0; cursor: pointer; }
-          .time { font-size: 2.1em; font-weight: 300; line-height: 1.05;
-            color: var(--primary-text-color); }
-          .row.off .time, .row.off .sub { opacity: 0.42; }
-          .row.ringing .time, .row.ringing .sub { color: #fff; }
-          .sub { font-size: 0.8em; color: var(--secondary-text-color);
-            margin-top: 2px; }
-          .switch { width: 46px; height: 27px; border-radius: 14px;
-            border: none; cursor: pointer; position: relative; flex-shrink: 0;
-            background: var(--disabled-text-color); transition: background .2s; }
-          .switch.on { background: var(--success-color, #43a047); }
-          .switch::after { content: ""; position: absolute; top: 3px; left: 3px;
-            width: 21px; height: 21px; border-radius: 50%; background: #fff;
-            transition: transform .2s; }
-          .switch.on::after { transform: translateX(19px); }
-          .btn { border: none; border-radius: 10px; padding: 7px 12px;
-            cursor: pointer; font: inherit; font-size: .85em;
-            background: var(--secondary-background-color);
-            color: var(--primary-text-color); }
-          .btn.primary { background: var(--primary-color);
-            color: var(--text-primary-color, #fff); }
-          .btn.danger { color: var(--error-color, #ef5350); }
-          .empty { padding: 22px 8px; text-align: center;
-            color: var(--secondary-text-color); }
-          .note { font-size: .78em; color: var(--secondary-text-color);
-            padding: 6px 8px 0; }
-          .editor { padding: 4px 8px 8px; }
-          .field { margin-bottom: 14px; }
-          .field > label { display: block; font-size: .75em;
-            text-transform: uppercase; letter-spacing: .05em;
-            color: var(--secondary-text-color); margin-bottom: 6px; }
-          input[type="time"], input[type="text"] {
-            width: 100%; box-sizing: border-box; font: inherit;
-            padding: 10px; border-radius: 10px;
-            border: 1px solid var(--divider-color);
-            background: var(--card-background-color);
-            color: var(--primary-text-color); }
-          input[type="time"] { font-size: 2em; text-align: center;
-            font-weight: 300; }
-          .pills { display: flex; gap: 6px; flex-wrap: wrap; }
-          .pill { flex: 1; min-width: 38px; border: none; border-radius: 10px;
-            padding: 9px 0; cursor: pointer; font: inherit; font-size: .85em;
-            background: var(--secondary-background-color);
-            color: var(--secondary-text-color); }
-          .pill.on { background: var(--primary-color);
-            color: var(--text-primary-color, #fff); font-weight: 600; }
-          .check { display: flex; align-items: center; gap: 10px;
-            font-size: .9em; margin-bottom: 10px; }
-          .actions { display: flex; gap: 8px; margin-top: 16px; }
-          .actions .btn { flex: 1; padding: 11px; }
-        </style>
-        <ha-card>
-          <div class="head">
-            <span>⏰</span><span class="title">${title}</span>
-            ${
-              this._editing
-                ? ""
-                : '<button class="add" data-action="new" title="Wecker hinzufügen">+</button>'
-            }
-          </div>
-          ${body}
-        </ha-card>`;
+        <style>${STYLES}</style>
+        <ha-card class="${classes}" style="--hac-columns:${columns}">
+          ${this._renderHeader()}
+          ${this._renderBody(config)}
+        </ha-card>
+        <div class="popup-host"></div>`;
+      this._popupHost = this.shadowRoot.querySelector(".popup-host");
+      this._renderPopup();
     }
 
-    _renderList(meta) {
-      const alarms = this._alarms();
+    _renderHeader() {
+      const config = this._config;
+      const meta = this._meta();
       const target = meta.target
-        ? `<div class="note">🔊 Klingelt in: <b>${esc(meta.target)}</b>${
-            meta.in_bed ? " · im Bett erkannt" : ""
-          }</div>`
+        ? `<div class="targetline">
+             <ha-icon icon="mdi:volume-high"></ha-icon>
+             <span>Klingelt in <b>${esc(meta.target)}</b>${
+               meta.in_bed ? " · im Bett erkannt" : ""
+             }</span>
+           </div>`
         : "";
-      if (!alarms.length) {
-        return `${target}<div class="empty">Kein Wecker gestellt.<br>
-          Mit ＋ oben rechts anlegen.</div>`;
-      }
-      const rows = alarms
-        .map((alarm) => {
-          const ringing =
-            alarm.status === "ringing" || alarm.status === "verifying";
-          const enabled = alarm.enabled !== false;
-          const parts = [alarm.schedule];
-          if (alarm.workday_only) parts.push("nur Arbeitstage");
-          if (alarm.skip_next) parts.push("nächster übersprungen");
-          if (enabled && alarm.next_trigger && !ringing) {
-            const rel = fmtRelative(alarm.next_trigger);
-            if (rel) parts.push(rel);
-          }
-          const controls = ringing
-            ? `<button class="btn" data-action="snooze" data-id="${esc(
-                alarm.id
-              )}">😴</button>
-               <button class="btn primary" data-action="dismiss" data-id="${esc(
-                 alarm.id
-               )}">Aus</button>`
-            : `<button class="switch ${enabled ? "on" : ""}"
-                 data-action="toggle" data-id="${esc(alarm.id)}"></button>`;
-          return `
-            <div class="row ${ringing ? "ringing" : enabled ? "" : "off"}">
-              <div class="main" data-action="edit" data-id="${esc(alarm.id)}">
-                <div class="time">${esc(alarm.time)}</div>
-                <div class="sub">${esc(
-                  [alarm.label, ...parts].filter(Boolean).join(" · ")
-                )}</div>
-              </div>
-              ${controls}
-            </div>`;
-        })
-        .join("");
-      return target + rows;
+      return `
+        <div class="header">
+          <div class="titlerow">
+            <div class="iconchip head-icon"><ha-icon icon="mdi:alarm"></ha-icon></div>
+            <div class="titles">
+              <div class="title">${esc(config.title ?? "Wecker")}</div>
+              ${
+                config.subtitle
+                  ? `<div class="subtitle">${esc(config.subtitle)}</div>`
+                  : ""
+              }
+            </div>
+            <button class="add" data-action="new" title="Wecker hinzufügen">
+              <ha-icon icon="mdi:plus"></ha-icon>
+            </button>
+          </div>
+          ${target}
+        </div>`;
     }
 
-    _renderEditor() {
-      const draft = this._draft;
-      const isNew = this._editing === "new";
-      const dayPills = DAYS.map(
-        ([key, label]) => `
-          <button class="pill ${draft.days.includes(key) ? "on" : ""}"
-            data-action="day" data-value="${key}">${label}</button>`
+    _renderBody(config) {
+      if (!this._entity()) {
+        return `<div class="empty">Kein Herold-Wecker-Sensor gefunden.</div>`;
+      }
+      const alarms = this._alarms();
+      if (!alarms.length) {
+        return `<div class="empty">
+          <ha-icon icon="mdi:alarm-off"></ha-icon>
+          <div>Kein Wecker gestellt.</div>
+          <button class="btn primary" data-action="new">Wecker anlegen</button>
+        </div>`;
+      }
+      const carousel = config.layout === "carousel" ? "carousel" : "";
+      return `<div class="alarms ${carousel}">
+        ${alarms.map((alarm) => this._renderAlarm(alarm)).join("")}
+      </div>`;
+    }
+
+    _renderAlarm(alarm) {
+      const ringing = alarm.status === "ringing" || alarm.status === "verifying";
+      const enabled = alarm.enabled !== false;
+      const accent = ringing
+        ? "var(--error-color, #ef5350)"
+        : ACCENTS[alarm.urgency] || ACCENTS.normal;
+
+      const dots = DAYS.map(
+        ([key, label]) =>
+          `<span class="dot ${
+            (alarm.days || []).includes(key) ? "on" : ""
+          }">${label}</span>`
       ).join("");
-      const urgencyPills = URGENCY.map(
-        ([key, label]) => `
-          <button class="pill ${draft.urgency === key ? "on" : ""}"
-            data-action="urgency" data-value="${key}">${label}</button>`
-      ).join("");
-      const soundPills = SOUNDS.map(
-        ([key, label]) => `
-          <button class="pill ${
-            draft.sound_mode === "builtin" && draft.sound === key ? "on" : ""
-          }" data-action="sound" data-value="${key}">${label}</button>`
-      ).join("");
+
+      const badges = [];
+      if (alarm.workday_only) badges.push(["mdi:briefcase", "Arbeitstage"]);
+      if (alarm.blocked) badges.push(["mdi:sleep-off", "heute blockiert"]);
+      if (alarm.skip_next) badges.push(["mdi:debug-step-over", "übersprungen"]);
+      if (alarm.routine) badges.push(["mdi:play-circle", "Routine"]);
+      if (alarm.valid_until) {
+        badges.push(["mdi:timer-sand", `bis ${fmtDate(alarm.valid_until)}`]);
+      }
+      if (alarm.voice_snooze) badges.push(["mdi:microphone", "Sprach-Snooze"]);
+
+      const rel =
+        enabled && !ringing && alarm.next_trigger
+          ? fmtRelative(alarm.next_trigger)
+          : "";
+      const sub = [alarm.schedule, rel].filter(Boolean).join(" · ");
+
+      const controls = ringing
+        ? `<div class="ringrow">
+             <button class="btn" data-action="snooze" data-id="${esc(alarm.id)}">
+               <ha-icon icon="mdi:snooze"></ha-icon> Schlummern
+             </button>
+             <button class="btn primary" data-action="dismiss"
+               data-id="${esc(alarm.id)}">Ich bin wach</button>
+           </div>`
+        : "";
 
       return `
-        <div class="editor">
+        <div class="alarm ${ringing ? "ringing" : enabled ? "" : "off"}"
+          style="--hac-accent:${accent}"
+          data-action="edit" data-id="${esc(alarm.id)}">
+          <div class="ahead">
+            <div class="iconchip">
+              <ha-icon icon="${ringing ? "mdi:bell-ring" : "mdi:alarm"}"></ha-icon>
+            </div>
+            <div class="atime">${esc(alarm.time)}</div>
+            <div class="alabel">${esc(alarm.label || "")}</div>
+          </div>
+          ${
+            ringing
+              ? ""
+              : `<button class="switch ${enabled ? "on" : ""}"
+                   data-action="toggle" data-id="${esc(alarm.id)}"
+                   aria-label="Wecker an/aus"></button>`
+          }
+          <div class="days">${dots}</div>
+          <div class="asub">${esc(sub)}</div>
+          ${
+            badges.length
+              ? `<div class="badges">${badges
+                  .map(
+                    ([icon, text]) =>
+                      `<span class="badge"><ha-icon icon="${icon}"></ha-icon>${esc(
+                        text
+                      )}</span>`
+                  )
+                  .join("")}</div>`
+              : ""
+          }
+          ${controls}
+        </div>`;
+    }
+
+    // -- The settings dialog ----------------------------------------------
+
+    _renderPopup() {
+      if (!this._popupHost) return;
+      if (!this._editing) {
+        this._popupHost.innerHTML = "";
+        return;
+      }
+      const draft = this._draft;
+      const isNew = this._editing === "new";
+      const alarm = isNew
+        ? null
+        : this._alarms().find((item) => item.id === this._editing);
+      const accent = ACCENTS[draft.urgency] || ACCENTS.normal;
+
+      this._popupHost.innerHTML = `
+        <div class="backdrop s-${this._cardStyle()} ${
+          this._popupFresh ? "anim" : ""
+        }" data-action="close">
+          <div class="dialog" role="dialog" aria-modal="true"
+            style="--hac-accent:${accent}"
+            >
+            <div class="dialog-head">
+              <div class="iconchip"><ha-icon icon="mdi:alarm"></ha-icon></div>
+              <div class="dialog-title">${
+                isNew ? "Neuer Wecker" : esc(draft.label || alarm?.time || "Wecker")
+              }</div>
+              <button class="close" data-action="close" aria-label="Schließen">
+                <ha-icon icon="mdi:close"></ha-icon>
+              </button>
+            </div>
+            ${this._renderForm(draft, isNew, alarm)}
+          </div>
+        </div>`;
+      this._popupFresh = false;
+    }
+
+    _renderForm(draft, isNew, alarm) {
+      const pills = (items, action, active) =>
+        items
+          .map(
+            ([key, label, icon]) => `
+              <button class="pill ${active(key) ? "on" : ""}"
+                data-action="${action}" data-value="${esc(key)}">
+                ${icon ? `<ha-icon icon="${icon}"></ha-icon>` : ""}${esc(label)}
+              </button>`
+          )
+          .join("");
+
+      const dayPills = pills(DAYS, "day", (key) => draft.days.includes(key));
+      const presetPills = DAY_PRESETS.map(
+        ([label, days], index) => `
+          <button class="chip ${
+            days.length === draft.days.length &&
+            days.every((day) => draft.days.includes(day))
+              ? "on"
+              : ""
+          }" data-action="preset" data-value="${index}">${label}</button>`
+      ).join("");
+      const urgencyPills = pills(URGENCY, "urgency", (key) => draft.urgency === key);
+      const modePills = pills(
+        SOUND_MODES,
+        "sound-mode",
+        (key) => draft.sound_mode === key
+      );
+
+      let soundBlock = "";
+      if (draft.sound_mode === "builtin") {
+        soundBlock = `
+          <div class="pills">${pills(
+            SOUNDS,
+            "sound",
+            (key) => draft.sound === key
+          )}</div>
+          <button class="chip wide" data-action="preview">
+            <ha-icon icon="mdi:play"></ha-icon> Anhören
+          </button>`;
+      } else if (draft.sound_mode === "media") {
+        soundBlock = `
+          <input type="text" data-field="sound" value="${esc(draft.sound || "")}"
+            placeholder="media-source://… oder https://…/wecker.mp3">
+          <div class="hint">Alles, was der Lautsprecher abspielen kann.</div>`;
+      } else if (draft.sound_mode === "music_assistant") {
+        soundBlock = `
+          <input type="text" data-field="sound" value="${esc(draft.sound || "")}"
+            placeholder="z.B. Morning Playlist">
+          <div class="hint">
+            Suchbegriff für Music Assistant — Playlist, Album oder Radiosender.
+          </div>`;
+      } else {
+        soundBlock = `<div class="hint">
+          Kein Ton, nur die gesprochene Nachricht. Zum Aufwachen selten genug.
+        </div>`;
+      }
+
+      const routineOptions = [
+        `<option value="">— keine —</option>`,
+        ...this._routines().map(
+          ([id, name]) =>
+            `<option value="${esc(id)}" ${
+              draft.routine === id ? "selected" : ""
+            }>${esc(name)}</option>`
+        ),
+      ].join("");
+
+      const snoozeInfo =
+        alarm && alarm.snoozes
+          ? `<div class="hint">Bisher ${alarm.snoozes}× geschlummert.</div>`
+          : "";
+
+      return `
+        <div class="form">
           <div class="field">
             <label>Uhrzeit</label>
-            <input type="time" data-field="time" value="${esc(draft.time)}">
+            <input type="time" class="big" data-field="time"
+              value="${esc(draft.time)}">
           </div>
+
           <div class="field">
-            <label>Wiederholung — nichts gewählt = einmalig</label>
-            <div class="pills">${dayPills}</div>
+            <label>Wiederholung</label>
+            <div class="chips">${presetPills}</div>
+            <div class="pills days-pills">${dayPills}</div>
+            <div class="hint">${
+              draft.days.length
+                ? "Klingelt jede Woche an den gewählten Tagen."
+                : "Nichts gewählt = einmalig, danach löscht sich der Wecker."
+            }</div>
           </div>
+
           <div class="field">
             <label>Bezeichnung</label>
             <input type="text" data-field="label" value="${esc(draft.label)}"
               placeholder="z.B. Arbeit">
           </div>
+
           <div class="field">
             <label>Hartnäckigkeit</label>
             <div class="pills">${urgencyPills}</div>
-            <div class="note" style="padding-left:0">
-              Sanft: leise, gibt schnell auf · Normal: 3 Snoozes ·
-              Hartnäckig: laut, 1 kurzer Snooze
+            <div class="hint">${URGENCY_HINT[draft.urgency] || ""}</div>
+            ${snoozeInfo}
+          </div>
+
+          <div class="field">
+            <label>Klang</label>
+            <div class="pills">${modePills}</div>
+            ${soundBlock}
+          </div>
+
+          <div class="field">
+            <label class="check">
+              <input type="checkbox" data-field="announce"
+                ${draft.announce ? "checked" : ""}>
+              <span>Nachricht ansagen</span>
+            </label>
+            ${
+              draft.announce
+                ? `<input type="text" data-field="message"
+                     value="${esc(draft.message)}"
+                     placeholder="Guten Morgen — Zeit aufzustehen.">
+                   <div class="hint">Leer lassen für den Standardtext.</div>`
+                : ""
+            }
+          </div>
+
+          <div class="field">
+            <label class="check">
+              <input type="checkbox" data-field="workday_only"
+                ${draft.workday_only ? "checked" : ""}>
+              <span>Nur an Arbeitstagen</span>
+            </label>
+            <div class="hint">Feiertage und Krankmeldung blockieren ihn dann.</div>
+            <label class="check">
+              <input type="checkbox" data-field="voice_snooze"
+                ${draft.voice_snooze ? "checked" : ""}>
+              <span>Per Sprache schlummern</span>
+            </label>
+            <div class="hint">
+              Nutzt den Assist-Satelliten statt des Lautsprechers — leiser,
+              aber man kann ihn anreden.
             </div>
           </div>
-          <div class="field">
-            <label>Weckton</label>
-            <div class="pills">${soundPills}</div>
-          </div>
-          <label class="check">
-            <input type="checkbox" data-field="announce"
-              ${draft.announce ? "checked" : ""}>
-            Nachricht nach dem Ton ansagen
-          </label>
-          <label class="check">
-            <input type="checkbox" data-field="workday_only"
-              ${draft.workday_only ? "checked" : ""}>
-            Nur an Arbeitstagen (Feiertage und Krankheit blockieren)
-          </label>
-          <label class="check">
-            <input type="checkbox" data-field="voice_snooze"
-              ${draft.voice_snooze ? "checked" : ""}>
-            Per Sprache schlummern (nutzt den Satelliten statt des Lautsprechers)
-          </label>
+
+          <button class="chip wide" data-action="advanced">
+            <ha-icon icon="${
+              this._advanced ? "mdi:chevron-up" : "mdi:chevron-down"
+            }"></ha-icon>
+            Mehr Einstellungen
+          </button>
+
+          ${this._advanced ? this._renderAdvanced(draft, routineOptions) : ""}
+
           <div class="actions">
-            <button class="btn" data-action="cancel-edit">Abbrechen</button>
+            <button class="btn" data-action="close">Abbrechen</button>
             ${
               isNew
                 ? ""
@@ -434,12 +726,641 @@
             }
             <button class="btn primary" data-action="save">Speichern</button>
           </div>
+          ${
+            !isNew && draft.repeating && !draft.skip_next
+              ? `<button class="chip wide" data-action="skip"
+                   data-id="${esc(this._editing)}">
+                   <ha-icon icon="mdi:debug-step-over"></ha-icon>
+                   Nächstes Mal überspringen
+                 </button>`
+              : ""
+          }
         </div>`;
+    }
+
+    _renderAdvanced(draft, routineOptions) {
+      return `
+        <div class="field">
+          <label>Guten-Morgen-Routine</label>
+          <select data-field="routine">${routineOptions}</select>
+          <div class="hint">
+            Skript oder Szene, das läuft, sobald du wirklich aufgestanden bist —
+            nicht beim ersten Schlummern.
+          </div>
+        </div>
+        <div class="field">
+          <label>Läuft ab am</label>
+          <input type="datetime-local" data-field="valid_until"
+            value="${esc(draft.valid_until)}">
+          <div class="hint">
+            Für befristete Wecker, etwa während einer Projektwoche. Leer =
+            unbefristet.
+          </div>
+        </div>`;
+    }
+  }
+
+  // -- Styles --------------------------------------------------------------
+
+  const STYLES = `
+    :host {
+      --hac-card-bg: var(--ha-card-background, var(--card-background-color, #fff));
+      --hac-tile-bg: color-mix(in srgb, var(--primary-text-color) 4%, var(--hac-card-bg));
+      --hac-accent: var(--primary-color, #03a9f4);
+    }
+    .cardroot { display: block; padding: 16px; }
+    .cardroot.flush { padding: 0; }
+    .cardroot.flat { --hac-tile-bg: transparent; }
+    .cardroot.nobg { background: none; box-shadow: none; border: none; }
+
+    /* ---- card styles --------------------------------------------------- */
+    .s-glass {
+      --hac-tile-bg: color-mix(in srgb, var(--hac-card-bg) 42%, transparent);
+      --hac-tile-radius: 22px;
+    }
+    ha-card.cardroot.s-glass {
+      background: color-mix(in srgb, var(--hac-card-bg) 55%, transparent);
+      -webkit-backdrop-filter: blur(18px) saturate(1.5);
+      backdrop-filter: blur(18px) saturate(1.5);
+    }
+    .s-glass .alarm {
+      border: 1px solid color-mix(in srgb, var(--primary-text-color) 12%, transparent);
+      box-shadow:
+        inset 0 1px 0 color-mix(in srgb, #fff 25%, transparent),
+        0 8px 24px color-mix(in srgb, #000 10%, transparent);
+      -webkit-backdrop-filter: blur(18px) saturate(1.5);
+      backdrop-filter: blur(18px) saturate(1.5);
+    }
+    .s-glass .iconchip {
+      background: color-mix(in srgb, var(--hac-accent) 24%, transparent);
+      border: 1px solid color-mix(in srgb, #fff 30%, transparent);
+      box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent);
+      -webkit-backdrop-filter: blur(10px) saturate(1.4);
+      backdrop-filter: blur(10px) saturate(1.4);
+    }
+    .s-glass .dialog {
+      background: color-mix(in srgb, var(--hac-card-bg) 55%, transparent);
+      -webkit-backdrop-filter: blur(26px) saturate(1.5);
+      backdrop-filter: blur(26px) saturate(1.5);
+      border: 1px solid color-mix(in srgb, #fff 25%, transparent);
+      box-shadow:
+        inset 0 1px 0 color-mix(in srgb, #fff 30%, transparent),
+        0 12px 48px rgba(0, 0, 0, 0.35);
+    }
+
+    .s-material { --hac-tile-radius: 24px; }
+    ha-card.cardroot.s-material { border-radius: 28px; }
+    .s-material .alarm {
+      position: relative;
+      overflow: hidden;
+      background: color-mix(in srgb, var(--hac-accent) 12%, var(--hac-card-bg));
+    }
+    .s-material .alarm::before {
+      content: '';
+      position: absolute;
+      top: -70px;
+      left: -70px;
+      width: 190px;
+      height: 190px;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--hac-accent) 22%, transparent);
+      pointer-events: none;
+    }
+    .s-material .alarm > * { position: relative; }
+    .s-material .iconchip {
+      border-radius: 14px;
+      background: var(--hac-accent);
+      color: var(--hac-card-bg);
+    }
+    .s-material .dialog {
+      border-radius: 28px;
+      background:
+        radial-gradient(
+          circle at -30px -30px,
+          color-mix(in srgb, var(--hac-accent) 24%, transparent) 0 130px,
+          transparent 131px
+        ),
+        color-mix(in srgb, var(--hac-accent) 9%, var(--hac-card-bg));
+      --hac-tile-bg: color-mix(in srgb, var(--hac-accent) 14%, var(--hac-card-bg));
+    }
+    .s-material .dialog .iconchip {
+      background: var(--hac-accent);
+      color: var(--hac-card-bg);
+    }
+
+    .s-bubble { --hac-tile-bg: var(--hac-card-bg); --hac-tile-radius: 32px; }
+    ha-card.cardroot.s-bubble {
+      background: none;
+      box-shadow: none;
+      border: none;
+    }
+    .s-bubble .alarm {
+      box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0, 0, 0, 0.08));
+      padding: 14px 18px;
+    }
+    .s-bubble .iconchip { width: 42px; height: 42px; }
+    .s-bubble .iconchip ha-icon { --mdc-icon-size: 22px; }
+    .s-bubble .alabel { font-weight: 700; }
+    .s-bubble .dialog { border-radius: 32px; }
+
+    .s-mirror { --hac-tile-bg: #000; --hac-tile-radius: 14px; color: #fff; }
+    ha-card.cardroot.s-mirror {
+      background: #000;
+      box-shadow: none;
+      border: none;
+    }
+    .s-mirror .alarm { border: 1px solid rgba(255, 255, 255, 0.28); }
+    .s-mirror .title,
+    .s-mirror .atime,
+    .s-mirror .alabel,
+    .s-mirror .dialog-title,
+    .s-mirror .dot.on,
+    .s-mirror label,
+    .s-mirror .check span { color: #fff; }
+    .s-mirror .subtitle,
+    .s-mirror .asub,
+    .s-mirror .hint,
+    .s-mirror .targetline,
+    .s-mirror .dot { color: rgba(255, 255, 255, 0.72); }
+    .s-mirror .iconchip { background: rgba(255, 255, 255, 0.14); color: #fff; }
+    .s-mirror .dialog { background: #000; border: 1px solid rgba(255, 255, 255, 0.3); }
+    .s-mirror .close,
+    .s-mirror .chip,
+    .s-mirror .pill,
+    .s-mirror .btn {
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+    }
+    .s-mirror .pill.on,
+    .s-mirror .chip.on,
+    .s-mirror .btn.primary { background: #fff; color: #000; }
+    .s-mirror input, .s-mirror select {
+      background: #000;
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    /* ---- header -------------------------------------------------------- */
+    .header { padding: 0 2px 14px; }
+    .cardroot.flush .header { padding: 0 0 12px; }
+    .titlerow { display: flex; align-items: center; gap: 10px; }
+    .titles { flex: 1; min-width: 0; }
+    .title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--primary-text-color);
+    }
+    .subtitle { font-size: 13px; color: var(--secondary-text-color); margin-top: 2px; }
+    .head-icon { --hac-accent: var(--primary-color, #03a9f4); }
+    .add {
+      width: 36px;
+      height: 36px;
+      flex: none;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary-color);
+      background: color-mix(in srgb, var(--primary-color) 14%, transparent);
+    }
+    .targetline {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      font-size: 12.5px;
+      color: var(--secondary-text-color);
+    }
+    .targetline ha-icon { --mdc-icon-size: 16px; }
+
+    /* ---- alarm tiles --------------------------------------------------- */
+    .alarms {
+      display: grid;
+      grid-template-columns: repeat(var(--hac-columns, 1), minmax(0, 1fr));
+      gap: 12px;
+    }
+    .cardroot.flat .alarms { gap: 4px; }
+    .cardroot.flat .alarm { border: none; box-shadow: none; }
+    .alarms.carousel {
+      display: flex;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: none;
+    }
+    .alarms.carousel::-webkit-scrollbar { display: none; }
+    .alarms.carousel > .alarm {
+      flex: 0 0 min(85%, 320px);
+      scroll-snap-align: center;
+      min-width: 0;
+    }
+    .alarm {
+      position: relative;
+      background: var(--hac-tile-bg);
+      border-radius: var(--hac-tile-radius, 16px);
+      box-sizing: border-box;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .alarm:hover {
+      background: color-mix(in srgb, var(--primary-text-color) 7%, var(--hac-card-bg));
+    }
+    .alarm.off { opacity: 0.5; }
+    .alarm.ringing {
+      animation: hac-pulse 1.4s ease-in-out infinite;
+      box-shadow: 0 0 0 2px var(--hac-accent);
+    }
+    @keyframes hac-pulse {
+      50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--hac-accent) 25%, transparent); }
+    }
+    .ahead {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      padding-right: 52px;
+    }
+    .iconchip {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--hac-accent);
+      background: color-mix(in srgb, var(--hac-accent) 14%, transparent);
+    }
+    .iconchip ha-icon { --mdc-icon-size: 18px; }
+    .atime {
+      font-size: 34px;
+      font-weight: 300;
+      line-height: 1;
+      letter-spacing: -1px;
+      font-variant-numeric: tabular-nums;
+      color: var(--primary-text-color);
+    }
+    .alabel {
+      flex: 1;
+      min-width: 0;
+      font-size: 14px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--primary-text-color);
+    }
+    .switch {
+      position: absolute;
+      top: 14px;
+      right: 16px;
+      width: 46px;
+      height: 27px;
+      border-radius: 14px;
+      border: none;
+      cursor: pointer;
+      flex-shrink: 0;
+      background: var(--disabled-text-color);
+      transition: background 0.2s;
+    }
+    .switch.on { background: var(--success-color, #43a047); }
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 21px;
+      height: 21px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 0.2s;
+    }
+    .switch.on::after { transform: translateX(19px); }
+    .days { display: flex; gap: 4px; }
+    .dot {
+      flex: 1;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 0;
+      border-radius: 6px;
+      color: var(--secondary-text-color);
+      opacity: 0.45;
+    }
+    .dot.on {
+      opacity: 1;
+      color: var(--hac-accent);
+      background: color-mix(in srgb, var(--hac-accent) 14%, transparent);
+    }
+    .asub { font-size: 12.5px; color: var(--secondary-text-color); }
+    .badges { display: flex; flex-wrap: wrap; gap: 5px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      color: var(--secondary-text-color);
+      background: color-mix(in srgb, var(--primary-text-color) 8%, transparent);
+    }
+    .badge ha-icon { --mdc-icon-size: 13px; }
+    .ringrow { display: flex; gap: 8px; margin-top: 2px; }
+    .ringrow .btn { flex: 1; }
+
+    /* ---- shared controls ----------------------------------------------- */
+    .btn {
+      border: none;
+      border-radius: 12px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      background: color-mix(in srgb, var(--primary-text-color) 8%, transparent);
+      color: var(--primary-text-color);
+    }
+    .btn ha-icon { --mdc-icon-size: 17px; }
+    .btn.primary {
+      background: var(--hac-accent);
+      color: var(--text-primary-color, #fff);
+      font-weight: 600;
+    }
+    .btn.danger { color: var(--error-color, #ef5350); }
+    .pills { display: flex; gap: 6px; flex-wrap: wrap; }
+    .days-pills { margin-top: 6px; }
+    .pill {
+      flex: 1;
+      min-width: 42px;
+      border: none;
+      border-radius: 11px;
+      padding: 9px 6px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12.5px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      background: color-mix(in srgb, var(--primary-text-color) 8%, transparent);
+      color: var(--secondary-text-color);
+    }
+    .pill ha-icon { --mdc-icon-size: 16px; }
+    .pill.on {
+      background: var(--hac-accent);
+      color: var(--text-primary-color, #fff);
+      font-weight: 600;
+    }
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      border: none;
+      border-radius: 999px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      background: color-mix(in srgb, var(--primary-text-color) 8%, transparent);
+      color: var(--secondary-text-color);
+    }
+    .chip ha-icon { --mdc-icon-size: 15px; }
+    .chip.on {
+      background: color-mix(in srgb, var(--hac-accent) 20%, transparent);
+      color: var(--hac-accent);
+      font-weight: 600;
+    }
+    .chip.wide { width: 100%; margin-bottom: 14px; }
+    .empty {
+      padding: 26px 8px;
+      text-align: center;
+      color: var(--secondary-text-color);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .empty ha-icon { --mdc-icon-size: 34px; opacity: 0.5; }
+
+    /* ---- dialog -------------------------------------------------------- */
+    .backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .backdrop.anim { animation: hac-fadein 0.15s ease; }
+    @keyframes hac-fadein { from { opacity: 0; } }
+    .dialog {
+      width: min(440px, 100%);
+      max-height: 86vh;
+      overflow-y: auto;
+      box-sizing: border-box;
+      background: var(--hac-card-bg);
+      color: var(--primary-text-color);
+      border-radius: 24px;
+      padding: 20px;
+      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      --hac-tile-bg: color-mix(in srgb, var(--primary-text-color) 4%, var(--hac-card-bg));
+    }
+    .dialog-head { display: flex; align-items: center; gap: 10px; }
+    .dialog-title {
+      flex: 1;
+      font-size: 17px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .close {
+      width: 32px;
+      height: 32px;
+      flex: none;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--secondary-text-color);
+      background: color-mix(in srgb, var(--primary-text-color) 7%, transparent);
+    }
+    .close ha-icon { --mdc-icon-size: 18px; }
+    .field { margin-bottom: 16px; }
+    .field > label {
+      display: block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+      color: var(--secondary-text-color);
+      margin-bottom: 7px;
+    }
+    input[type="time"],
+    input[type="text"],
+    input[type="datetime-local"],
+    select {
+      width: 100%;
+      box-sizing: border-box;
+      font: inherit;
+      font-size: 14px;
+      padding: 11px;
+      border-radius: 12px;
+      border: 1px solid var(--divider-color);
+      background: var(--hac-card-bg);
+      color: var(--primary-text-color);
+    }
+    input.big {
+      font-size: 40px;
+      text-align: center;
+      font-weight: 300;
+      letter-spacing: -1px;
+      padding: 6px;
+    }
+    .hint {
+      font-size: 11.5px;
+      line-height: 1.45;
+      color: var(--secondary-text-color);
+      margin-top: 6px;
+    }
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      margin-bottom: 8px;
+      text-transform: none;
+      letter-spacing: 0;
+      cursor: pointer;
+    }
+    .check input { accent-color: var(--hac-accent); width: 18px; height: 18px; }
+    .actions { display: flex; gap: 8px; margin-top: 4px; }
+    .actions .btn { flex: 1; padding: 12px 8px; }
+  `;
+
+  // -- Lovelace visual editor ---------------------------------------------
+
+  const EDITOR_SCHEMA = [
+    { name: "title", selector: { text: {} } },
+    { name: "subtitle", selector: { text: {} } },
+    {
+      name: "entity",
+      selector: { entity: { domain: "sensor", integration: "herold" } },
+    },
+    {
+      name: "card_style",
+      selector: {
+        select: {
+          mode: "dropdown",
+          options: [
+            { value: "default", label: "Standard" },
+            { value: "glass", label: "Liquid Glass" },
+            { value: "material", label: "Material You" },
+            { value: "bubble", label: "Bubble" },
+            { value: "mirror", label: "Magic Mirror" },
+          ],
+        },
+      },
+    },
+    {
+      name: "layout",
+      selector: {
+        select: {
+          mode: "dropdown",
+          options: [
+            { value: "grid", label: "Raster" },
+            { value: "carousel", label: "Karussell" },
+          ],
+        },
+      },
+    },
+    { name: "columns", selector: { number: { min: 1, max: 3, mode: "box" } } },
+    { name: "tiles", selector: { boolean: {} } },
+    { name: "background", selector: { boolean: {} } },
+    { name: "flush", selector: { boolean: {} } },
+  ];
+
+  const EDITOR_LABELS = {
+    title: "Überschrift",
+    subtitle: "Untertitel",
+    entity: "Wecker-Sensor (leer = automatisch)",
+    card_style: "Kartenstil",
+    layout: "Anordnung",
+    columns: "Spalten",
+    tiles: "Wecker als Kacheln",
+    background: "Kartenhintergrund",
+    flush: "Ohne Außenabstand",
+  };
+
+  class HeroldAlarmCardEditor extends HTMLElement {
+    setConfig(config) {
+      this._config = config || {};
+      this._render();
+    }
+
+    set hass(hass) {
+      this._hass = hass;
+      if (this._form) this._form.hass = hass;
+    }
+
+    _render() {
+      if (this._form) {
+        this._form.data = this._data();
+        return;
+      }
+      this._form = document.createElement("ha-form");
+      this._form.schema = EDITOR_SCHEMA;
+      this._form.data = this._data();
+      this._form.hass = this._hass;
+      this._form.computeLabel = (item) => EDITOR_LABELS[item.name] || item.name;
+      this._form.addEventListener("value-changed", (event) => {
+        this.dispatchEvent(
+          new CustomEvent("config-changed", {
+            detail: { config: { ...this._config, ...event.detail.value } },
+            bubbles: true,
+            composed: true,
+          })
+        );
+      });
+      this.appendChild(this._form);
+    }
+
+    _data() {
+      return {
+        card_style: "default",
+        layout: "grid",
+        columns: 1,
+        tiles: true,
+        background: true,
+        flush: false,
+        ...this._config,
+      };
     }
   }
 
   if (!customElements.get("herold-alarm-card")) {
     customElements.define("herold-alarm-card", HeroldAlarmCard);
+  }
+  if (!customElements.get("herold-alarm-card-editor")) {
+    customElements.define("herold-alarm-card-editor", HeroldAlarmCardEditor);
   }
   window.customCards = window.customCards || [];
   if (!window.customCards.some((card) => card.type === "herold-alarm-card")) {
@@ -448,6 +1369,8 @@
       name: "Herold Alarm Card",
       description:
         "Wecker stellen, bearbeiten, schlummern und ausschalten — im Stil einer Wecker-App.",
+      preview: true,
+      documentationURL: "https://github.com/BobMcGlobus/herold",
     });
   }
 })();

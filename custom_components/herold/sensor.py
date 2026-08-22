@@ -368,6 +368,7 @@ class HeroldNextAlarmSensor(HeroldSignalSensor):
                     "time": alarm.time,
                     "days": alarm.days,
                     "label": alarm.label,
+                    "message": alarm.message,
                     "status": alarm.status,
                     "enabled": alarm.enabled,
                     "schedule": alarm.describe(),
@@ -377,6 +378,13 @@ class HeroldNextAlarmSensor(HeroldSignalSensor):
                     "announce": alarm.announce,
                     "voice_snooze": alarm.voice_snooze,
                     "workday_only": alarm.workday_only,
+                    "routine": alarm.routine,
+                    "valid_until": (
+                        alarm.valid_until.isoformat()
+                        if alarm.valid_until
+                        else None
+                    ),
+                    "snoozes": alarm.snoozes,
                     "skip_next": alarm.skip_next,
                     "blocked": manager.is_blocked(alarm),
                     "key": alarm.key,

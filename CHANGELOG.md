@@ -6,6 +6,34 @@ README) are German — see `translations/`. Entity ids below use the English
 names; on a German instance they are the translated ones, e.g.
 `sensor.herold_naechster_wecker` for `sensor.*_next_alarm`.
 
+## 1.3.0 — The alarm card grows up
+
+- **Settings live in a popup now.** Tapping an alarm opens a sheet instead of
+  swapping the whole card for a form — the list stays where it was, and the
+  card no longer repaints out from under a field you are typing in
+- **More per-alarm settings**, all of which the services already supported
+  but the card could not reach: the spoken wake message, the sound source
+  (built-in tone, any media id, a Music Assistant search, or speech only),
+  the good-morning routine picked from your scripts and scenes, and an
+  expiry date for a temporary alarm. Built-in tones have an audition button
+- Repeat presets (Weekdays / Weekend / Daily / One-off), "skip the next one"
+  from inside the sheet, and a live hint explaining what the chosen urgency
+  actually does
+- **Five card styles** — `default`, `glass`, `material`, `bubble`, `mirror` —
+  plus `columns`, `layout`, `tiles`, `background` and `flush`, matching the
+  Weatherglass card so both can share a dashboard. All of it is editable in
+  the visual card editor
+- Alarms render as tiles with a weekday strip and status badges (work alarm,
+  blocked today, skipped, routine, expires, voice snooze); the accent colour
+  follows the urgency and a ringing alarm pulses
+- **The announcement target is named, not spelled.** `sensor.*_next_alarm`
+  and both cards showed the raw entity id of an explicitly configured
+  speaker; they now show its friendly name. The description also prefers the
+  media player over the satellite, which is the order the alarm really uses
+- Optional alarm fields can be **cleared** again: emptying the routine, the
+  expiry, the label or the tone removes it instead of being ignored, and an
+  emptied wake message falls back to the default text
+
 ## 1.2.0 — An alarm clock that actually wakes you
 
 The alarm used to speak a TTS sentence every 45 seconds. A spoken sentence

@@ -62,6 +62,7 @@ from .const import (
     signal_todo,
 )
 from .dispatcher import DispatchContext, select_channels, should_deliver
+from .entity_resolver import friendly_name
 from .llm_tools import HeroldAPI
 from .models import (
     DeliveryResult,
@@ -579,11 +580,11 @@ class HeroldCoordinator:
     @callback
     def describe_alarm_target(self) -> str:
         """Describe where an alarm would ring, for the sensor and the card."""
-        explicit = self.config.get(CONF_ALARM_SAT_ENTITY) or self.config.get(
-            CONF_ALARM_MEDIA_PLAYER
+        explicit = self.config.get(CONF_ALARM_MEDIA_PLAYER) or self.config.get(
+            CONF_ALARM_SAT_ENTITY
         )
         if explicit:
-            return explicit
+            return friendly_name(self.hass, explicit)
         bedroom = self._configured_alarm_room()
         if bedroom is not None and self.in_bed:
             return bedroom.name

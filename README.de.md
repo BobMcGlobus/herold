@@ -187,12 +187,27 @@ data:
   # valid_until: "+7d"              # temporärer Wecker
 ```
 
-**Am bequemsten über die Karte.** `custom:herold-alarm-card` aufs Dashboard: Liste mit großen Uhrzeiten und Schaltern, ＋ zum Anlegen, Tippen zum Bearbeiten — Uhrzeit, Wochentage, Bezeichnung, Hartnäckigkeit, Weckton und der Arbeitstag-Schalter. Auf dem iPhone öffnet das Zeitfeld das native Rad.
+**Am bequemsten über die Karte.** `custom:herold-alarm-card` aufs Dashboard: Wecker als Kacheln mit großer Uhrzeit, Wochentagsleiste, Status-Badges und Schalter. ＋ legt einen an, ein Tipp auf die Kachel öffnet die **Einstellungen als Popup** — Uhrzeit, Wiederholung (mit den Vorlagen Werktags / Wochenende / Täglich), Bezeichnung, Hartnäckigkeit, Klangquelle samt Anhören-Knopf, die Ansage, Arbeitstag- und Sprach-Snooze-Schalter, und unter „Mehr Einstellungen“ die Guten-Morgen-Routine und ein Ablaufdatum. Auf dem iPhone öffnet das Zeitfeld das native Rad.
 
 ```yaml
 type: custom:herold-alarm-card
 title: Wecker
+card_style: glass    # default · glass · material · bubble · mirror
+columns: 2
 ```
+
+| Option | Typ | Default | Beschreibung |
+|---|---|---|---|
+| `title` / `subtitle` | string | – | Überschrift |
+| `entity` | string | automatisch | Der Wecker-Sensor, wird selbst gefunden |
+| `card_style` | string | `default` | `default`, `glass`, `material`, `bubble`, `mirror` |
+| `layout` | string | `grid` | `grid` oder `carousel` |
+| `columns` | number | `1` | Kachel-Spalten (1–3) |
+| `tiles` | boolean | `true` | `false` = flache Zeilen statt Kacheln |
+| `background` | boolean | `true` | `false` entfernt Kartenhintergrund und Schatten |
+| `flush` | boolean | `false` | `true` entfernt den Außenabstand |
+
+Die Stile und ihre Tokens sind die der [Weatherglass](https://github.com/BobMcGlobus/Weatherglass)-Karte — auf einem gemeinsamen Dashboard passen beide zusammen. Alles ist auch im visuellen Karteneditor einstellbar.
 
 **Weckton** — vier Töne liegen bei (Glocke, Piepen, Sirene, Sonnenaufgang; von `scripts/generate_sounds.py` synthetisiert, daher ohne Lizenzfragen). `sound_mode` wählt die Quelle: `builtin`, `media` (beliebige Mediendatei, z.B. selbst hochgeladen), `music_assistant`, oder `announce` für das alte reine Sprechen. Die Ansage ist optional und folgt dem Ton.
 

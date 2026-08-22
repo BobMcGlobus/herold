@@ -107,6 +107,31 @@ async def test_explicit_speaker_needs_no_room(hass) -> None:
     assert coordinator.describe_alarm_target() == "media_player.clock_radio"
 
 
+async def test_explicit_target_is_named_not_id(hass) -> None:
+    """The card shows this string — an entity id tells the user nothing."""
+    hass.states.async_set(
+        "media_player.clock_radio",
+        "idle",
+        {"friendly_name": "Radiowecker Schlafzimmer"},
+    )
+    coordinator = _coordinator(
+        hass, {CONF_ALARM_MEDIA_PLAYER: "media_player.clock_radio"}
+    )
+    assert coordinator.describe_alarm_target() == "Radiowecker Schlafzimmer"
+
+
+async def test_speaker_beats_satellite_in_the_description(hass) -> None:
+    """Playback wins over announcement, so the description must say so."""
+    coordinator = _coordinator(
+        hass,
+        {
+            CONF_ALARM_MEDIA_PLAYER: "media_player.clock_radio",
+            CONF_ALARM_SAT_ENTITY: "assist_satellite.clock",
+        },
+    )
+    assert coordinator.describe_alarm_target() == "media_player.clock_radio"
+
+
 @pytest.mark.parametrize("value", ["on", "On", "ON"])
 async def test_bed_sensor_state_is_case_insensitive(hass, value: str) -> None:
     hass.states.async_set("binary_sensor.bed", value.lower())

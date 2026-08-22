@@ -180,7 +180,7 @@ _ALARM_FIELDS = {
     vol.Optional(ATTR_SOUND): cv.string,
     vol.Optional(ATTR_ANNOUNCE): cv.boolean,
     vol.Optional(ATTR_VOICE_SNOOZE): cv.boolean,
-    vol.Optional(ATTR_ROUTINE): cv.entity_id,
+    vol.Optional(ATTR_ROUTINE): vol.Any("", cv.entity_id),
     vol.Optional(ATTR_WORKDAY_ONLY): cv.boolean,
     vol.Optional(ATTR_VALID_UNTIL): cv.string,
     vol.Optional(ATTR_ENABLED): cv.boolean,
@@ -444,8 +444,9 @@ def _alarm_changes(data: dict) -> dict:
             changes[key] = data[key]
     if ATTR_DAYS in data:
         changes[ATTR_DAYS] = list(data[ATTR_DAYS] or [])
-    if raw := data.get(ATTR_VALID_UNTIL):
-        changes[ATTR_VALID_UNTIL] = parse_when(raw)
+    if ATTR_VALID_UNTIL in data:
+        raw = data[ATTR_VALID_UNTIL]
+        changes[ATTR_VALID_UNTIL] = parse_when(raw) if raw else ""
     return changes
 
 
@@ -454,6 +455,9 @@ async def _async_handle_alarm_set(call: ServiceCall) -> None:
     coordinator = _get_coordinator(call.hass)
     changes = _alarm_changes(call.data)
     changes.pop(ATTR_TIME, None)
+    # "" means "clear" when updating; on a new alarm it just means the field
+    # was left blank, so let the dataclass defaults stand.
+    changes = {name: value for name, value in changes.items() if value != ""}
     alarm = Alarm(
         time=call.data[ATTR_TIME],
         key=call.data.get(ATTR_KEY),
