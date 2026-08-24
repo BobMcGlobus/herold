@@ -6,6 +6,37 @@ README) are German — see `translations/`. Entity ids below use the English
 names; on a German instance they are the translated ones, e.g.
 `sensor.herold_naechster_wecker` for `sensor.*_next_alarm`.
 
+## 1.5.0 — Alarms ring where you tell them to
+
+Three field reports, one theme: the alarm decided for itself where to ring,
+and it decided badly.
+
+- **Fixes "failed to init decoder".** The built-in tones were 16 kHz WAV.
+  AirPlay receivers — an Apple TV, a HomePod — reject any sample rate but
+  44.1 kHz outright, so the tone never played. All four tones are now
+  44.1 kHz mono WAV. They are about three times the size; an alarm that
+  only works on some of the speakers in the house is worse
+- **Fixes alarms landing on the television.** With no alarm speaker
+  configured, the room router hands the alarm to whatever media player the
+  active room owns, and that is as likely to be a TV as a bedside speaker.
+  Two new per-alarm fields override the guess:
+  - `target` — pin the alarm to one `media_player` or `assist_satellite`
+  - `follow_me` — ring wherever you currently are, ignoring the bed sensor,
+    the bedroom and the configured alarm speaker. For alarms that have
+    nothing to do with sleeping: a nap on the couch, a timer at the desk
+- **Both are in the card**, under *Wo klingelt er* — a speaker dropdown and
+  a follow-me switch, with a line showing what an automatically-resolved
+  alarm points at right now. The alarm tiles show a pinned target or
+  "folgt mir" as a badge
+- `herold.alarm_test` takes a `target` too, so you can try a speaker without
+  first committing an alarm to it, and its response now names the entity it
+  actually played on
+- A player refusing the sound now says which player and which media instead
+  of only passing the driver's error through
+- `sensor.*_next_alarm` exposes `target`, `target_name` and `follow_me` per
+  alarm; the card's header line is labelled "Ohne festes Ziel" because that
+  is what it always was
+
 ## 1.4.0 — Your own wake-up sound, and a way to try it
 
 - **Drag an MP3 onto the card.** The sound section of the settings sheet is

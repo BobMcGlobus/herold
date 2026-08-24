@@ -707,6 +707,10 @@
           "name": "Wecker-ID",
           "description": "Testet Ton und Lautstärke dieses Weckers; ohne Angabe die Standardeinstellungen."
         },
+        "target": {
+          "name": "Klingelt auf",
+          "description": "Testet diesen Lautsprecher oder Satelliten statt des Ziels, das der Wecker wählen würde."
+        },
         "scope": {
           "name": "Was testen",
           "description": "Ton, das Sonnenaufgangslicht, die Rolläden oder alles zusammen."

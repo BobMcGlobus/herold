@@ -89,3 +89,21 @@ async def test_unknown_fields_are_ignored(hass, manager: AlarmManager) -> None:
     await manager.async_update(alarm.id, {"nonsense": "x", "label": "Sport"})
     assert alarm.label == "Sport"
     assert not hasattr(alarm, "nonsense")
+
+
+async def test_emptied_target_goes_back_to_automatic(
+    hass, manager: AlarmManager
+) -> None:
+    """Pinning a speaker must be undoable, not a one-way door."""
+    alarm = await _stored(manager, target="media_player.desk")
+    await manager.async_update(alarm.id, {"target": ""})
+    assert alarm.target is None
+
+
+async def test_follow_me_can_be_switched_back_off(
+    hass, manager: AlarmManager
+) -> None:
+    """A boolean False is falsy but must still be applied."""
+    alarm = await _stored(manager, follow_me=True)
+    await manager.async_update(alarm.id, {"follow_me": False})
+    assert alarm.follow_me is False

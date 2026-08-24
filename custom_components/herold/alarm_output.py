@@ -12,6 +12,7 @@ conversational snooze.
 
 from __future__ import annotations
 
+from dataclasses import replace
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -60,6 +61,13 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
+def split_output(entity_id: str) -> tuple[str | None, str | None]:
+    """Sort a pinned target into the (media_player, satellite) pair."""
+    if entity_id.startswith("assist_satellite."):
+        return (None, entity_id)
+    return (entity_id, None)
+
+
 class AlarmOutput:
     """Drives speakers, lights and blinds for the alarm clock."""
 
@@ -74,15 +82,24 @@ class AlarmOutput:
         The speaker is preferred: it can play a tone, the satellite cannot.
         A satellite only wins when the alarm wants to be snoozed by voice,
         because that needs a conversation.
+
+        An alarm may pin its own target. That is not a nicety: the room
+        router will happily hand an alarm to whatever media player the
+        active room owns, and an Apple TV is a poor thing to be woken by.
         """
-        room = await self.coordinator.async_get_alarm_room()
+        if alarm.target:
+            return split_output(alarm.target)
+
+        room = await self.coordinator.async_get_alarm_room(alarm)
         config = self.coordinator.config
-        player = config.get(CONF_ALARM_MEDIA_PLAYER) or (
+        # Configured overrides are the sleeping setup; an alarm that is
+        # explicitly not about sleeping must not inherit them.
+        player = (None if alarm.follow_me else config.get(CONF_ALARM_MEDIA_PLAYER)) or (
             room.media_player_entity if room else None
         )
-        satellite = config.get(CONF_ALARM_SAT_ENTITY) or (
-            room.sat_entity if room else None
-        )
+        satellite = (
+            None if alarm.follow_me else config.get(CONF_ALARM_SAT_ENTITY)
+        ) or (room.sat_entity if room else None)
 
         if alarm.voice_snooze and satellite:
             return (None, satellite)
@@ -139,16 +156,23 @@ class AlarmOutput:
             _LOGGER.warning("No playable alarm sound, skipping the tone")
             return
 
-        await self.coordinator.hass.services.async_call(
-            "media_player",
-            "play_media",
-            {
-                "entity_id": player,
-                "media_content_id": media_id,
-                "media_content_type": "music",
-            },
-            blocking=True,
-        )
+        try:
+            await self.coordinator.hass.services.async_call(
+                "media_player",
+                "play_media",
+                {
+                    "entity_id": player,
+                    "media_content_id": media_id,
+                    "media_content_type": "music",
+                },
+                blocking=True,
+            )
+        except HomeAssistantError as err:
+            # The bare player error ("failed to init decoder") says nothing
+            # about which speaker refused it, which is the whole question.
+            raise HomeAssistantError(
+                f"{player} could not play the alarm sound ({media_id}): {err}"
+            ) from err
 
     async def _async_resolve_media(
         self, media_id: str, player: str
@@ -316,6 +340,7 @@ class AlarmOutput:
         scope: str = TEST_SCOPE_SOUND,
         volume: float | None = None,
         seconds: int | None = None,
+        target: str | None = None,
     ) -> dict[str, Any]:
         """Run the alarm's effects once, right now, and undo them again.
 
@@ -324,17 +349,24 @@ class AlarmOutput:
         are snapshotted first and put back afterwards.
         """
         probe = alarm or Alarm(time="00:00")
+        if target:
+            probe = replace(probe, target=target)
         result: dict[str, Any] = {"scope": scope, "sound": False, "target": None}
         duration = max(1, int(seconds or DEFAULT_TEST_SECONDS))
 
         if scope in (TEST_SCOPE_SOUND, TEST_SCOPE_ALL):
+            player, satellite = await self.async_targets(probe)
             result["sound"] = await self._async_test_sound(probe, volume)
-            result["target"] = self.coordinator.describe_alarm_target()
+            result["target"] = self.coordinator.describe_alarm_target(probe)
+            # The entity ids, not just the label: "it played on the Apple TV"
+            # is the answer you actually need when a test sounds wrong.
+            result["media_player"] = player
+            result["satellite"] = satellite
 
         wants_light = scope in (TEST_SCOPE_LIGHT, TEST_SCOPE_ALL)
         wants_cover = scope in (TEST_SCOPE_COVER, TEST_SCOPE_ALL)
         if wants_light or wants_cover:
-            room = await self.coordinator.async_get_alarm_room()
+            room = await self.coordinator.async_get_alarm_room(probe)
             entities = list(room.flash_entities) if wants_light and room else []
             if wants_cover:
                 entities += self.coordinator.config.get(

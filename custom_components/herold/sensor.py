@@ -380,6 +380,11 @@ class HeroldNextAlarmSensor(HeroldSignalSensor):
                     "voice_snooze": alarm.voice_snooze,
                     "workday_only": alarm.workday_only,
                     "routine": alarm.routine,
+                    "follow_me": alarm.follow_me,
+                    # Where this one would ring — the top-level "target" is
+                    # only the default, and per-alarm targets differ.
+                    "target": alarm.target,
+                    "target_name": self.coordinator.describe_alarm_target(alarm),
                     "valid_until": (
                         alarm.valid_until.isoformat()
                         if alarm.valid_until

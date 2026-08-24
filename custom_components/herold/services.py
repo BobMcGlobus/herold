@@ -28,6 +28,7 @@ from .const import (
     ATTR_ENABLED,
     ATTR_ENTITY_ID,
     ATTR_ESCALATION,
+    ATTR_FOLLOW_ME,
     ATTR_FROM_STATE,
     ATTR_ID,
     ATTR_IGNORE_RATE_LIMIT,
@@ -53,6 +54,7 @@ from .const import (
     ATTR_SOUND_MODE,
     ATTR_SOURCE,
     ATTR_TAG,
+    ATTR_TARGET,
     ATTR_TARGET_PLAYER,
     ATTR_TASK_CONTEXT,
     ATTR_TEMPLATE,
@@ -201,6 +203,8 @@ _ALARM_FIELDS = {
     vol.Optional(ATTR_ANNOUNCE): cv.boolean,
     vol.Optional(ATTR_VOICE_SNOOZE): cv.boolean,
     vol.Optional(ATTR_ROUTINE): vol.Any("", cv.entity_id),
+    vol.Optional(ATTR_TARGET): vol.Any("", cv.entity_id),
+    vol.Optional(ATTR_FOLLOW_ME): cv.boolean,
     vol.Optional(ATTR_WORKDAY_ONLY): cv.boolean,
     vol.Optional(ATTR_VALID_UNTIL): cv.string,
     vol.Optional(ATTR_ENABLED): cv.boolean,
@@ -239,6 +243,7 @@ ALARM_TEST_SCHEMA = vol.Schema(
     {
         vol.Optional(ATTR_ID): cv.string,
         vol.Optional(ATTR_SCOPE, default=TEST_SCOPE_SOUND): vol.In(TEST_SCOPES),
+        vol.Optional(ATTR_TARGET): cv.entity_id,
         vol.Optional(ATTR_VOLUME): vol.All(
             vol.Coerce(float), vol.Range(min=0.0, max=1.0)
         ),
@@ -481,6 +486,8 @@ def _alarm_changes(data: dict) -> dict:
         ATTR_ANNOUNCE,
         ATTR_VOICE_SNOOZE,
         ATTR_ROUTINE,
+        ATTR_TARGET,
+        ATTR_FOLLOW_ME,
         ATTR_WORKDAY_ONLY,
         ATTR_ENABLED,
     ):
@@ -530,6 +537,7 @@ async def _async_handle_alarm_test(call: ServiceCall) -> ServiceResponse:
         scope=call.data[ATTR_SCOPE],
         volume=call.data.get(ATTR_VOLUME),
         seconds=call.data.get(ATTR_SECONDS),
+        target=call.data.get(ATTR_TARGET),
     )
 
 

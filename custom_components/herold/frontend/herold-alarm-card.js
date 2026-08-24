@@ -125,6 +125,10 @@
     });
   };
 
+  /** An entity's display name, falling back to its id. */
+  const nameOf = (hass, entityId) =>
+    hass?.states?.[entityId]?.attributes?.friendly_name || entityId;
+
   /** The bit of a media id worth showing: the file name. */
   const mediaLabel = (id) => {
     try {
@@ -219,6 +223,20 @@
       return CARD_STYLES.includes(style) ? style : "default";
     }
 
+    /** Everything an alarm could ring on. */
+    _speakers() {
+      return Object.keys(this._hass.states)
+        .filter(
+          (id) =>
+            id.startsWith("media_player.") || id.startsWith("assist_satellite.")
+        )
+        .map((id) => [
+          id,
+          this._hass.states[id].attributes.friendly_name || id,
+        ])
+        .sort((a, b) => String(a[1]).localeCompare(String(b[1]), "de"));
+    }
+
     /** Scripts and scenes the good-morning routine can pick from. */
     _routines() {
       return Object.keys(this._hass.states)
@@ -247,6 +265,8 @@
             workday_only: !!alarm.workday_only,
             voice_snooze: !!alarm.voice_snooze,
             routine: alarm.routine || "",
+            target: alarm.target || "",
+            follow_me: !!alarm.follow_me,
             valid_until: toLocalInput(alarm.valid_until),
             skip_next: !!alarm.skip_next,
             repeating: (alarm.days || []).length > 0,
@@ -264,6 +284,8 @@
             workday_only: false,
             voice_snooze: false,
             routine: "",
+            target: "",
+            follow_me: false,
             valid_until: "",
             skip_next: false,
             repeating: false,
@@ -396,11 +418,10 @@
       const field = el.dataset.field;
       const before = this._draft[field];
       this._draft[field] = el.type === "checkbox" ? el.checked : el.value;
-      // Checkboxes and selects change what the rest of the form should show;
-      // free text must never trigger a repaint or the caret jumps.
-      if (el.type === "checkbox" && before !== this._draft[field]) {
-        this._renderPopup();
-      }
+      // Checkboxes and the target select change what the rest of the form
+      // shows; free text must never repaint or the caret jumps.
+      if (before === this._draft[field]) return;
+      if (el.type === "checkbox" || field === "target") this._renderPopup();
     }
 
     _preview(sound) {
@@ -430,6 +451,8 @@
         workday_only: !!draft.workday_only,
         voice_snooze: !!draft.voice_snooze,
         routine: draft.routine,
+        target: draft.target,
+        follow_me: !!draft.follow_me,
         valid_until: draft.valid_until,
       };
       if (this._editing === "new") {
@@ -478,7 +501,7 @@
       const target = meta.target
         ? `<div class="targetline">
              <ha-icon icon="mdi:volume-high"></ha-icon>
-             <span>Klingelt in <b>${esc(meta.target)}</b>${
+             <span>Ohne festes Ziel: <b>${esc(meta.target)}</b>${
                meta.in_bed ? " · im Bett erkannt" : ""
              }</span>
            </div>`
@@ -536,6 +559,11 @@
       ).join("");
 
       const badges = [];
+      if (alarm.target) {
+        badges.push(["mdi:speaker", nameOf(this._hass, alarm.target)]);
+      } else if (alarm.follow_me) {
+        badges.push(["mdi:map-marker-account", "folgt mir"]);
+      }
       if (alarm.workday_only) badges.push(["mdi:briefcase", "Arbeitstage"]);
       if (alarm.blocked) badges.push(["mdi:sleep-off", "heute blockiert"]);
       if (alarm.skip_next) badges.push(["mdi:debug-step-over", "übersprungen"]);
@@ -763,6 +791,8 @@
             <div class="pills">${modePills}</div>
             ${soundBlock}
           </div>
+
+          ${this._renderTargetField(draft, alarm)}
 
           <div class="field">
             <label>Ausprobieren</label>
@@ -1051,6 +1081,53 @@
           this._renderPopup();
         }
       }, 4000);
+    }
+
+    // -- Where it rings ---------------------------------------------------
+
+    _renderTargetField(draft, alarm) {
+      const options = [
+        `<option value="">— automatisch wählen —</option>`,
+        ...this._speakers().map(
+          ([id, name]) =>
+            `<option value="${esc(id)}" ${
+              draft.target === id ? "selected" : ""
+            }>${esc(name)}</option>`
+        ),
+      ].join("");
+
+      // What the backend says it resolves to right now — the answer to
+      // "why did that play on the Apple TV".
+      const resolved = draft.target
+        ? ""
+        : alarm?.target_name
+          ? `<div class="hint">Aktuell: <b>${esc(alarm.target_name)}</b></div>`
+          : "";
+
+      return `
+        <div class="field">
+          <label>Wo klingelt er</label>
+          <select data-field="target">${options}</select>
+          <div class="hint">
+            Fest gewählt gewinnt immer — sonst sucht Herold selbst, und das
+            trifft auch mal einen Fernseher.
+          </div>
+          ${
+            draft.target
+              ? ""
+              : `<label class="check">
+                   <input type="checkbox" data-field="follow_me"
+                     ${draft.follow_me ? "checked" : ""}>
+                   <span>Da klingeln, wo ich gerade bin</span>
+                 </label>
+                 <div class="hint">
+                   Für Wecker, die nichts mit Schlafen zu tun haben —
+                   Nickerchen auf der Couch, Timer am Schreibtisch. Bettsensor
+                   und Schlafzimmer bleiben dann außen vor.
+                 </div>`
+          }
+          ${resolved}
+        </div>`;
     }
 
     _renderAdvanced(draft, routineOptions) {

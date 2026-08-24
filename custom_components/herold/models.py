@@ -269,6 +269,15 @@ class Alarm:
     announce: bool = True
     voice_snooze: bool = False
     routine: str | None = None
+    # Where this alarm rings, overriding every automatic choice. A
+    # media_player or an assist_satellite; the room router picks an
+    # Apple TV as readily as a bedside speaker, and only you know which
+    # one you actually want to be woken by.
+    target: str | None = None
+    # Ring wherever I am right now instead of in the bedroom — for a nap
+    # on the couch or a timer at the desk, where the bed sensor is silent
+    # and irrelevant.
+    follow_me: bool = False
     workday_only: bool = False
     valid_until: datetime | None = None
     snoozes: int = 0
@@ -367,6 +376,8 @@ class Alarm:
             "voice_snooze": self.voice_snooze,
             "sound_media_type": self.sound_media_type,
             "routine": self.routine,
+            "target": self.target,
+            "follow_me": self.follow_me,
             "workday_only": self.workday_only,
             "valid_until": (
                 self.valid_until.isoformat() if self.valid_until else None
@@ -397,6 +408,8 @@ class Alarm:
             voice_snooze=data.get("voice_snooze", False),
             sound_media_type=data.get("sound_media_type"),
             routine=data.get("routine"),
+            target=data.get("target"),
+            follow_me=data.get("follow_me", False),
             workday_only=data.get("workday_only", False),
             valid_until=_parse_datetime(data.get("valid_until")),
             snoozes=data.get("snoozes", 0),

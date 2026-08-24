@@ -12,6 +12,7 @@ from custom_components.herold.alarm_output import AlarmOutput
 from custom_components.herold.const import (
     CONF_ALARM_COVER_ENTITIES,
     CONF_ALARM_MEDIA_PLAYER,
+    CONF_ALARM_SAT_ENTITY,
     TEST_SCOPE_LIGHT,
     TEST_SCOPE_SOUND,
     TEST_SNAPSHOT_SCENE,
@@ -66,14 +67,65 @@ def output(hass) -> AlarmOutput:
         hass=hass,
         config={},
         volume=VolumeController(hass),
-        describe_alarm_target=lambda: "Bedroom",
+        describe_alarm_target=lambda alarm=None: "Bedroom",
     )
 
-    async def _room():
+    async def _room(alarm=None):
         return BEDROOM
 
     coordinator.async_get_alarm_room = _room
     return AlarmOutput(coordinator)
+
+
+# -- Where it rings --------------------------------------------------------
+
+
+async def test_pinned_target_beats_the_room_router(
+    hass, output: AlarmOutput
+) -> None:
+    """The room router will happily pick a TV; a pinned target must win."""
+    alarm = Alarm(time="07:00", target="media_player.bedside")
+    assert await output.async_targets(alarm) == ("media_player.bedside", None)
+
+
+async def test_a_pinned_satellite_is_not_treated_as_a_speaker(
+    hass, output: AlarmOutput
+) -> None:
+    alarm = Alarm(time="07:00", target="assist_satellite.desk")
+    assert await output.async_targets(alarm) == (None, "assist_satellite.desk")
+
+
+async def test_follow_me_ignores_the_sleeping_setup(
+    hass, output: AlarmOutput
+) -> None:
+    """A nap on the couch must not inherit the bedroom overrides."""
+    output.coordinator.config = {
+        CONF_ALARM_MEDIA_PLAYER: "media_player.bedside",
+        CONF_ALARM_SAT_ENTITY: "assist_satellite.bedside",
+    }
+    player, satellite = await output.async_targets(
+        Alarm(time="07:00", follow_me=True)
+    )
+    assert player == "media_player.bedroom"  # the active room's own speaker
+    assert satellite is None
+
+
+async def test_a_normal_alarm_still_uses_the_configured_speaker(
+    hass, output: AlarmOutput
+) -> None:
+    output.coordinator.config = {CONF_ALARM_MEDIA_PLAYER: "media_player.bedside"}
+    player, _satellite = await output.async_targets(Alarm(time="07:00"))
+    assert player == "media_player.bedside"
+
+
+async def test_the_test_run_reports_the_entity_it_used(
+    hass, output: AlarmOutput, calls
+) -> None:
+    """"It played on the Apple TV" is the answer a test has to give."""
+    result = await output.async_test(None, target="media_player.livingroom_tv")
+    await hass.async_block_till_done()
+    assert result["media_player"] == "media_player.livingroom_tv"
+    assert result["satellite"] is None
 
 
 # -- Uploaded files --------------------------------------------------------
@@ -187,10 +239,10 @@ async def test_sound_test_reports_when_there_is_no_output(hass) -> None:
         hass=hass,
         config={},
         volume=VolumeController(hass),
-        describe_alarm_target=lambda: "kein Lautsprecher konfiguriert",
+        describe_alarm_target=lambda alarm=None: "kein Lautsprecher konfiguriert",
     )
 
-    async def _room():
+    async def _room(alarm=None):
         return None
 
     coordinator.async_get_alarm_room = _room

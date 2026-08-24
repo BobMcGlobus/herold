@@ -13,9 +13,11 @@ from pathlib import Path
 import struct
 import wave
 
-# 16 kHz is ample for tones topping out around 2.2 kHz and keeps the
-# repository small — these files ship with the integration.
-RATE = 16000
+# 44.1 kHz, even though these tones top out around 2.2 kHz and 16 kHz would
+# be ample. AirPlay/RAOP receivers — an Apple TV, a HomePod — reject
+# anything else outright ("failed to init decoder"), and an alarm that only
+# plays on some of the speakers in the house is worse than a large file.
+RATE = 44100
 OUT = Path(__file__).resolve().parent.parent / (
     "custom_components/herold/frontend/sounds"
 )

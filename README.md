@@ -268,7 +268,8 @@ editor.
 
 **Sound** — four tones ship with the integration (chime, beep, siren,
 sunrise; synthesised by `scripts/generate_sounds.py`, so no third-party
-audio licensing). `sound_mode` picks the source:
+audio licensing — 44.1 kHz mono WAV, because AirPlay receivers reject
+anything else). `sound_mode` picks the source:
 
 | Mode | What `sound` holds |
 |---|---|
@@ -322,6 +323,20 @@ test at 22:00 does not leave the bedroom lit.
 **Volume** stays between a configurable floor and ceiling (options → alarm
 clock). Ring one starts at the floor and climbs towards the ceiling as the
 alarm is ignored — a speaker left quiet overnight cannot swallow it.
+
+**Where it rings.** Without any hint, Herold resolves a target itself: in
+bed → the bedroom, already up → the active room, nothing occupied → the
+bedroom. That is a guess, and it can land on the wrong device — the active
+room's media player may well be a TV. Two per-alarm fields override it:
+
+| Field | Effect |
+|---|---|
+| `target` | Pin this alarm to one `media_player` or `assist_satellite`. Wins over everything |
+| `follow_me` | Ring wherever you are right now, ignoring the bed sensor, the bedroom and the configured alarm speaker — for a nap on the couch or a timer at the desk |
+
+Both are in the card's settings sheet under *Wo klingelt er*, which also
+shows what an automatically-resolved alarm currently points at. For a
+house-wide default instead, set the alarm speaker in options → alarm clock.
 
 **Getting up is verified**: a dismiss while the bed sensor still reports
 occupancy counts as a reflex, and after a grace period the alarm resumes.

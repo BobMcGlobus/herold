@@ -344,6 +344,16 @@ alarm_set:
             - script
             - scene
             - automation
+    target:
+      example: media_player.schlafzimmer
+      selector:
+        entity:
+          domain:
+            - media_player
+            - assist_satellite
+    follow_me:
+      selector:
+        boolean:
     workday_only:
       selector:
         boolean:
@@ -433,6 +443,16 @@ alarm_update:
             - script
             - scene
             - automation
+    target:
+      example: media_player.schlafzimmer
+      selector:
+        entity:
+          domain:
+            - media_player
+            - assist_satellite
+    follow_me:
+      selector:
+        boolean:
     workday_only:
       selector:
         boolean:
@@ -487,6 +507,13 @@ alarm_test:
       example: a1b2c3d4
       selector:
         text:
+    target:
+      example: media_player.schlafzimmer
+      selector:
+        entity:
+          domain:
+            - media_player
+            - assist_satellite
     scope:
       required: true
       default: sound

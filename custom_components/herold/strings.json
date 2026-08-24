@@ -707,6 +707,10 @@
           "name": "Alarm ID",
           "description": "Test this alarm's sound and volume; defaults to the standard settings."
         },
+        "target": {
+          "name": "Ring on",
+          "description": "Test this speaker or satellite instead of the one the alarm would pick."
+        },
         "scope": {
           "name": "What to test",
           "description": "Sound, the sunrise lights, the blinds, or everything at once."

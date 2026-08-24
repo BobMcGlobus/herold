@@ -65,6 +65,7 @@ from .dispatcher import DispatchContext, select_channels, should_deliver
 from .entity_resolver import friendly_name
 from .llm_tools import HeroldAPI
 from .models import (
+    Alarm,
     DeliveryResult,
     DNDState,
     InternalResult,
@@ -551,7 +552,7 @@ class HeroldCoordinator:
             return None
         return next((room for room in self.rooms if room.name == name), None)
 
-    async def async_get_alarm_room(self) -> Room | None:
+    async def async_get_alarm_room(self, alarm: Alarm | None = None) -> Room | None:
         """Return the room an alarm should ring in.
 
         Occupancy sensors do not fire while somebody lies still in bed, so
@@ -559,8 +560,14 @@ class HeroldCoordinator:
         alarm would degrade to a silent push. The sleeping area wins
         whenever the bed sensor says the user is in it, and it is also the
         fallback when no room is active at all.
+
+        An alarm marked ``follow_me`` is not about sleeping at all — a nap
+        on the couch, a timer at the desk — so the bed and the bedroom play
+        no part in it.
         """
         bedroom = self._configured_alarm_room()
+        if alarm is not None and alarm.follow_me:
+            return await self.async_get_active_room()
         if bedroom is not None and self.in_bed:
             return bedroom
         active = await self.async_get_active_room()
@@ -578,19 +585,25 @@ class HeroldCoordinator:
             _LOGGER.error("Alarm could not be delivered at all: %s", err)
 
     @callback
-    def describe_alarm_target(self) -> str:
+    def describe_alarm_target(self, alarm: Alarm | None = None) -> str:
         """Describe where an alarm would ring, for the sensor and the card."""
-        explicit = self.config.get(CONF_ALARM_MEDIA_PLAYER) or self.config.get(
-            CONF_ALARM_SAT_ENTITY
+        if alarm is not None and alarm.target:
+            return friendly_name(self.hass, alarm.target)
+        follow_me = alarm is not None and alarm.follow_me
+        explicit = None if follow_me else (
+            self.config.get(CONF_ALARM_MEDIA_PLAYER)
+            or self.config.get(CONF_ALARM_SAT_ENTITY)
         )
         if explicit:
             return friendly_name(self.hass, explicit)
         bedroom = self._configured_alarm_room()
-        if bedroom is not None and self.in_bed:
+        if not follow_me and bedroom is not None and self.in_bed:
             return bedroom.name
         active = select_room(self)
         if active is not None:
             return active.name
+        if follow_me:
+            return "kein Raum aktiv"
         if bedroom is not None:
             return bedroom.name
         return "kein Lautsprecher konfiguriert"

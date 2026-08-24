@@ -11,7 +11,7 @@ from custom_components.herold.const import (
     CONF_ALARM_SAT_ENTITY,
 )
 from custom_components.herold.coordinator import HeroldCoordinator
-from custom_components.herold.models import Room
+from custom_components.herold.models import Alarm, Room
 
 BEDROOM = Room(
     name="Bedroom",
@@ -137,3 +137,56 @@ async def test_bed_sensor_state_is_case_insensitive(hass, value: str) -> None:
     hass.states.async_set("binary_sensor.bed", value.lower())
     coordinator = _coordinator(hass, {CONF_ALARM_BED_SENSOR: "binary_sensor.bed"})
     assert coordinator.in_bed is True
+
+
+# -- Per-alarm targets -----------------------------------------------------
+
+
+async def test_follow_me_never_lands_in_the_bedroom(hass) -> None:
+    """A couch nap must not be routed to the bed just because you are in it."""
+    hass.states.async_set("binary_sensor.bed", "on")
+    coordinator = _coordinator(
+        hass,
+        {CONF_ALARM_BED_SENSOR: "binary_sensor.bed", CONF_ALARM_ROOM: "Bedroom"},
+        occupied={"binary_sensor.kitchen"},
+    )
+    alarm = Alarm(time="14:00", follow_me=True)
+    room = await coordinator.async_get_alarm_room(alarm)
+    assert room is not None
+    assert room.name == "Kitchen"
+
+
+async def test_follow_me_with_nothing_occupied_has_no_room(hass) -> None:
+    """No fallback to the bedroom — that is the whole point of follow-me."""
+    coordinator = _coordinator(hass, {CONF_ALARM_ROOM: "Bedroom"})
+    assert await coordinator.async_get_alarm_room(Alarm(time="14:00")) is not None
+    assert (
+        await coordinator.async_get_alarm_room(Alarm(time="14:00", follow_me=True))
+        is None
+    )
+
+
+async def test_pinned_target_is_described_by_name(hass) -> None:
+    hass.states.async_set(
+        "media_player.desk", "idle", {"friendly_name": "Schreibtisch"}
+    )
+    coordinator = _coordinator(hass, {CONF_ALARM_ROOM: "Bedroom"})
+    alarm = Alarm(time="14:00", target="media_player.desk")
+    assert coordinator.describe_alarm_target(alarm) == "Schreibtisch"
+
+
+async def test_follow_me_ignores_the_configured_override(hass) -> None:
+    coordinator = _coordinator(
+        hass,
+        {CONF_ALARM_MEDIA_PLAYER: "media_player.clock_radio"},
+        occupied={"binary_sensor.kitchen"},
+    )
+    assert coordinator.describe_alarm_target() == "media_player.clock_radio"
+    following = Alarm(time="14:00", follow_me=True)
+    assert coordinator.describe_alarm_target(following) == "Kitchen"
+
+
+async def test_follow_me_says_so_when_no_room_is_active(hass) -> None:
+    coordinator = _coordinator(hass, {CONF_ALARM_ROOM: "Bedroom"})
+    described = coordinator.describe_alarm_target(Alarm(time="14:00", follow_me=True))
+    assert described == "kein Raum aktiv"

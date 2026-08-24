@@ -209,7 +209,7 @@ columns: 2
 
 Die Stile und ihre Tokens sind die der [Weatherglass](https://github.com/BobMcGlobus/Weatherglass)-Karte — auf einem gemeinsamen Dashboard passen beide zusammen. Alles ist auch im visuellen Karteneditor einstellbar.
 
-**Weckton** — vier Töne liegen bei (Glocke, Piepen, Sirene, Sonnenaufgang; von `scripts/generate_sounds.py` synthetisiert, daher ohne Lizenzfragen). `sound_mode` wählt die Quelle:
+**Weckton** — vier Töne liegen bei (Glocke, Piepen, Sirene, Sonnenaufgang; von `scripts/generate_sounds.py` synthetisiert, daher ohne Lizenzfragen — 44,1 kHz Mono-WAV, weil AirPlay-Empfänger alles andere ablehnen). `sound_mode` wählt die Quelle:
 
 | Modus | Was in `sound` steht |
 |---|---|
@@ -245,6 +245,15 @@ In der Karte gibt es dafür die Chips *Ton testen* und *Licht testen*, und für 
 | hartnäckig | 25 s | 15 Durchgängen | 1×, dann verweigert |
 
 **Die Lautstärke** bleibt zwischen einer einstellbaren Unter- und Obergrenze (Optionen → Wecker). Der erste Durchgang startet an der Untergrenze und klettert Richtung Obergrenze, solange du nicht reagierst — ein abends leise gedrehter Lautsprecher kann den Wecker also nicht mehr schlucken.
+
+**Wo er klingelt.** Ohne Vorgabe sucht Herold das Ziel selbst: im Bett → Schlafzimmer, schon auf → aktiver Raum, nichts belegt → Schlafzimmer. Das ist geraten und kann daneben liegen — der Media Player des aktiven Raums ist womöglich ein Fernseher. Zwei Felder pro Wecker überschreiben das:
+
+| Feld | Wirkung |
+|---|---|
+| `target` | Bindet diesen Wecker an einen bestimmten `media_player` oder `assist_satellite`. Gewinnt immer |
+| `follow_me` | Klingelt dort, wo du gerade bist — ohne Bettsensor, Schlafzimmer und konfigurierten Weckerlautsprecher. Für ein Nickerchen auf der Couch oder einen Timer am Schreibtisch |
+
+Beides steht in der Karte unter *Wo klingelt er*; dort zeigt sie auch, worauf ein automatisch aufgelöster Wecker gerade zeigt. Für einen hausweiten Standard stattdessen den Weckerlautsprecher in Optionen → Wecker setzen.
 
 **Aufstehen wird geprüft:** Ein Dismiss, während der Bett-Sensor noch Belegung meldet, gilt als Reflex — nach einer Karenzzeit macht der Wecker weiter. In den Optionen abschaltbar, falls dir das zu streng ist.
 
