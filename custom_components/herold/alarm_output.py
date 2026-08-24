@@ -55,10 +55,25 @@ from .models import Alarm
 if TYPE_CHECKING:
     from datetime import datetime
 
+    from homeassistant.core import HomeAssistant
+
     from .coordinator import HeroldCoordinator
     from .models import Room
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def is_display(hass: HomeAssistant, entity_id: str | None) -> bool:
+    """True for a television, which makes a poor alarm speaker.
+
+    A TV sleeps at night, wakes slowly, and its streaming stack refuses
+    plenty of perfectly ordinary audio files. The room router does not know
+    that; it just sees a media player in the active room.
+    """
+    if not entity_id:
+        return False
+    state = hass.states.get(entity_id)
+    return state is not None and state.attributes.get("device_class") == "tv"
 
 
 def split_output(entity_id: str) -> tuple[str | None, str | None]:
@@ -133,10 +148,22 @@ class AlarmOutput:
             return True
 
         volume = self.volume_for_ring(alarm, ring)
+        spoke = False
         async with self.coordinator.volume.announce_at(player, volume):
             if alarm.sound_mode != SOUND_MODE_ANNOUNCE_ONLY:
-                await self._async_play_sound(alarm, player)
-            if alarm.announce or alarm.sound_mode == SOUND_MODE_ANNOUNCE_ONLY:
+                try:
+                    await self._async_play_sound(alarm, player)
+                except HomeAssistantError as err:
+                    # A player that refuses the tone would otherwise refuse
+                    # it on every one of the fifteen rings, and the alarm
+                    # would fail silently all the way through.
+                    _LOGGER.error("Alarm %s: %s — falling back to speech",
+                                  alarm.id, err)
+                    await self._async_speak(player, satellite, alarm.message)
+                    spoke = True
+            if not spoke and (
+                alarm.announce or alarm.sound_mode == SOUND_MODE_ANNOUNCE_ONLY
+            ):
                 await self._async_speak(player, satellite, alarm.message)
         return True
 
@@ -356,12 +383,26 @@ class AlarmOutput:
 
         if scope in (TEST_SCOPE_SOUND, TEST_SCOPE_ALL):
             player, satellite = await self.async_targets(probe)
-            result["sound"] = await self._async_test_sound(probe, volume)
             result["target"] = self.coordinator.describe_alarm_target(probe)
             # The entity ids, not just the label: "it played on the Apple TV"
             # is the answer you actually need when a test sounds wrong.
             result["media_player"] = player
             result["satellite"] = satellite
+            try:
+                result["sound"] = await self._async_test_sound(probe, volume)
+            except HomeAssistantError as err:
+                # A test that raises is a red toast the user has to squint
+                # at. A test that reports can say what to do instead.
+                result["sound"] = False
+                result["error"] = str(err)
+                result["hint"] = (
+                    "Dieser Fernseher kann die Datei nicht abspielen — "
+                    "Fernseher sind als Weckerziel selten geeignet. Wähle "
+                    "unter „Wo klingelt er“ einen Lautsprecher."
+                    if is_display(self.coordinator.hass, player)
+                    else "Wähle unter „Wo klingelt er“ ein anderes Ziel, "
+                    "oder einen anderen Weckton."
+                )
 
         wants_light = scope in (TEST_SCOPE_LIGHT, TEST_SCOPE_ALL)
         wants_cover = scope in (TEST_SCOPE_COVER, TEST_SCOPE_ALL)

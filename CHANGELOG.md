@@ -6,6 +6,25 @@ README) are German — see `translations/`. Entity ids below use the English
 names; on a German instance they are the translated ones, e.g.
 `sensor.herold_naechster_wecker` for `sensor.*_next_alarm`.
 
+## 1.5.1 — When a speaker says no
+
+An Apple TV refusing to stream the wake-up file exposed three things that
+were worse than the refusal itself.
+
+- **A refused tone no longer means a silent alarm.** If the player rejects
+  the sound, the ring falls back to speaking the message instead of failing
+  and repeating the same failure on all fifteen rings
+- **The test reports instead of raising.** `herold.alarm_test` returns
+  `media_player`, `satellite`, `sound`, and on failure an `error` plus a
+  `hint` naming what to change. The card renders it inline under the test
+  chips — *Spielt auf Schlafzimmer Speaker*, or the reason it did not
+- **Televisions are called out in the target picker.** Media players with
+  `device_class: tv` sit in their own group and are flagged when selected.
+  A TV sleeps at night, wakes slowly, and its streaming stack refuses
+  plenty of ordinary audio files, but the room router cannot tell
+- The card's *Ton testen* chip now sends the target currently selected in
+  the sheet, so you can try a speaker before committing the alarm to it
+
 ## 1.5.0 — Alarms ring where you tell them to
 
 Three field reports, one theme: the alarm decided for itself where to ring,

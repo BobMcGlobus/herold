@@ -312,6 +312,11 @@ and there are two buttons (`button.*_test_alarm_sound` /
 snapshotted before the test and restored afterwards (default 12 s), so a
 test at 22:00 does not leave the bedroom lit.
 
+The test reports rather than raising: the response carries `media_player`,
+`satellite`, `sound`, and on failure an `error` plus a `hint` about what to
+change. The card renders that inline — *Spielt auf Schlafzimmer Speaker*, or
+the reason it did not.
+
 **Urgency** decides how stubborn it is:
 
 | Level | Interval | Gives up after | Snoozes |
@@ -337,6 +342,13 @@ room's media player may well be a TV. Two per-alarm fields override it:
 Both are in the card's settings sheet under *Wo klingelt er*, which also
 shows what an automatically-resolved alarm currently points at. For a
 house-wide default instead, set the alarm speaker in options → alarm clock.
+
+Media players with `device_class: tv` are listed in a separate group and
+flagged when picked. A television is a poor alarm: it sleeps at night, wakes
+slowly, and its streaming stack refuses plenty of ordinary audio files — an
+Apple TV in particular. If the chosen player refuses the tone at ring time,
+the alarm falls back to speaking the message rather than staying silent for
+all fifteen rings.
 
 **Getting up is verified**: a dismiss while the bed sensor still reports
 occupancy counts as a reflex, and after a grace period the alarm resumes.

@@ -236,6 +236,8 @@ data:
 
 In der Karte gibt es dafür die Chips *Ton testen* und *Licht testen*, und für ein Dashboard zwei Buttons (`button.*_weckton_testen` / `button.*_weckerlicht_testen`). Licht und Rolläden werden vor dem Test in einer Szene gesichert und danach wiederhergestellt (Standard 12 s) — ein Test um 22:00 lässt das Schlafzimmer also nicht erleuchtet zurück.
 
+Der Test wirft keinen Fehler, er berichtet: die Antwort enthält `media_player`, `satellite`, `sound` und im Fehlerfall `error` plus einen `hint`, was zu ändern ist. Die Karte zeigt das direkt im Popup an — *Spielt auf Schlafzimmer Speaker*, oder eben warum nicht.
+
 **Hartnäckigkeit** bestimmt, wie zäh er ist:
 
 | Stufe | Intervall | Gibt auf nach | Schlummern |
@@ -254,6 +256,8 @@ In der Karte gibt es dafür die Chips *Ton testen* und *Licht testen*, und für 
 | `follow_me` | Klingelt dort, wo du gerade bist — ohne Bettsensor, Schlafzimmer und konfigurierten Weckerlautsprecher. Für ein Nickerchen auf der Couch oder einen Timer am Schreibtisch |
 
 Beides steht in der Karte unter *Wo klingelt er*; dort zeigt sie auch, worauf ein automatisch aufgelöster Wecker gerade zeigt. Für einen hausweiten Standard stattdessen den Weckerlautsprecher in Optionen → Wecker setzen.
+
+Media Player mit `device_class: tv` stehen in einer eigenen Gruppe und werden markiert, wenn du sie wählst. Ein Fernseher ist ein schlechter Wecker: er schläft nachts, wacht langsam auf, und sein Streaming-Stack verweigert etliche ganz normale Audiodateien — ein Apple TV besonders. Verweigert der gewählte Player den Ton beim Klingeln, spricht der Wecker die Nachricht, statt fünfzehn Durchgänge lang stumm zu bleiben.
 
 **Aufstehen wird geprüft:** Ein Dismiss, während der Bett-Sensor noch Belegung meldet, gilt als Reflex — nach einer Karenzzeit macht der Wecker weiter. In den Optionen abschaltbar, falls dir das zu streng ist.
 

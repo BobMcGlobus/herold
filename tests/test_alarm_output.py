@@ -4,6 +4,7 @@ from datetime import timedelta
 from types import SimpleNamespace
 
 from homeassistant.core import SupportsResponse
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 import pytest
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
@@ -126,6 +127,61 @@ async def test_the_test_run_reports_the_entity_it_used(
     await hass.async_block_till_done()
     assert result["media_player"] == "media_player.livingroom_tv"
     assert result["satellite"] is None
+
+
+async def test_a_refusing_player_does_not_fail_the_test_silently(
+    hass, output: AlarmOutput
+) -> None:
+    """A red toast is not a diagnosis; the result has to say what to do."""
+
+    async def _refuse(call):
+        raise HomeAssistantError("Failed to stream media to the Apple TV")
+
+    hass.services.async_register("media_player", "play_media", _refuse)
+    hass.states.async_set(
+        "media_player.livingroom", "idle", {"device_class": "tv"}
+    )
+    result = await output.async_test(None, target="media_player.livingroom")
+    assert result["sound"] is False
+    assert "Apple TV" in result["error"]
+    assert "Fernseher" in result["hint"]
+
+
+async def test_a_refusing_player_falls_back_to_speech_when_ringing(
+    hass, output: AlarmOutput, caplog
+) -> None:
+    """Fifteen silent rings is the worst possible failure mode."""
+    spoken: list[dict] = []
+
+    async def _refuse(call):
+        raise HomeAssistantError("Failed to stream media")
+
+    async def _announce(call):
+        spoken.append(dict(call.data))
+
+    hass.services.async_register("media_player", "play_media", _refuse)
+    hass.services.async_register("assist_satellite", "announce", _announce)
+
+    alarm = Alarm(time="07:00", target="media_player.livingroom")
+    output.coordinator.config = {CONF_ALARM_SAT_ENTITY: "assist_satellite.bed"}
+    # A pinned player with no satellite of its own still reaches the
+    # configured one through _async_speak.
+    played = await output.async_ring(alarm, 1)
+    assert played is True
+    assert "falling back to speech" in caplog.text
+
+
+def test_only_televisions_are_flagged(hass) -> None:
+    from custom_components.herold.alarm_output import is_display
+
+    hass.states.async_set("media_player.tv", "off", {"device_class": "tv"})
+    hass.states.async_set("media_player.sonos", "idle", {"device_class": "speaker"})
+    hass.states.async_set("media_player.plain", "idle", {})
+    assert is_display(hass, "media_player.tv") is True
+    assert is_display(hass, "media_player.sonos") is False
+    assert is_display(hass, "media_player.plain") is False
+    assert is_display(hass, "media_player.gone") is False
+    assert is_display(hass, None) is False
 
 
 # -- Uploaded files --------------------------------------------------------

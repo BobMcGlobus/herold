@@ -223,18 +223,31 @@
       return CARD_STYLES.includes(style) ? style : "default";
     }
 
-    /** Everything an alarm could ring on. */
+    /** Everything an alarm could ring on, sorted into "good" and "TV".
+     *
+     * A television is a poor alarm: it sleeps at night, wakes slowly, and
+     * its streaming stack refuses plenty of ordinary audio files. Keeping
+     * them in a separate group is the difference between a working alarm
+     * and a silent one.
+     */
     _speakers() {
-      return Object.keys(this._hass.states)
-        .filter(
-          (id) =>
-            id.startsWith("media_player.") || id.startsWith("assist_satellite.")
-        )
-        .map((id) => [
-          id,
-          this._hass.states[id].attributes.friendly_name || id,
-        ])
-        .sort((a, b) => String(a[1]).localeCompare(String(b[1]), "de"));
+      const groups = { speakers: [], displays: [] };
+      for (const id of Object.keys(this._hass.states)) {
+        if (
+          !id.startsWith("media_player.") &&
+          !id.startsWith("assist_satellite.")
+        ) {
+          continue;
+        }
+        const attrs = this._hass.states[id].attributes;
+        const entry = [id, attrs.friendly_name || id];
+        if (attrs.device_class === "tv") groups.displays.push(entry);
+        else groups.speakers.push(entry);
+      }
+      const byName = (a, b) => String(a[1]).localeCompare(String(b[1]), "de");
+      groups.speakers.sort(byName);
+      groups.displays.sort(byName);
+      return groups;
     }
 
     /** Scripts and scenes the good-morning routine can pick from. */
@@ -797,25 +810,22 @@
           <div class="field">
             <label>Ausprobieren</label>
             <div class="chips">
-              <button class="chip ${this._tested === "sound" ? "on" : ""}"
-                data-action="test-sound">
-                <ha-icon icon="${
-                  this._tested === "sound" ? "mdi:check" : "mdi:volume-high"
-                }"></ha-icon>
-                Ton testen
+              <button class="chip ${
+                this._tested?.scope === "sound" ? "on" : ""
+              }" data-action="test-sound">
+                <ha-icon icon="mdi:volume-high"></ha-icon> Ton testen
               </button>
-              <button class="chip ${this._tested === "light" ? "on" : ""}"
-                data-action="test-light">
-                <ha-icon icon="${
-                  this._tested === "light" ? "mdi:check" : "mdi:lightbulb-on"
-                }"></ha-icon>
-                Licht testen
+              <button class="chip ${
+                this._tested?.scope === "light" ? "on" : ""
+              }" data-action="test-light">
+                <ha-icon icon="mdi:lightbulb-on"></ha-icon> Licht testen
               </button>
             </div>
+            ${this._renderTestResult()}
             <div class="hint">
-              Klingelt sofort auf dem echten Ziel — ungespeicherte Änderungen
-              zählen erst nach dem Speichern. Das Licht geht danach von selbst
-              wieder in den vorherigen Zustand.
+              Klingelt sofort. Das Ziel unten wird sofort berücksichtigt, die
+              übrigen Klangeinstellungen erst nach dem Speichern. Das Licht
+              geht danach von selbst in den vorherigen Zustand zurück.
             </div>
           </div>
 
@@ -1069,32 +1079,98 @@
 
     // -- Trying it out ----------------------------------------------------
 
-    _test(scope) {
+    async _test(scope) {
       const data = { scope };
       if (this._editing && this._editing !== "new") data.id = this._editing;
-      this._call("alarm_test", data);
-      this._tested = scope;
+      // The target may be unsaved — test what is on screen, not what was
+      // stored, or the button lies about what it is testing.
+      if (this._draft?.target) data.target = this._draft.target;
+      this._tested = { scope, busy: true };
       this._renderPopup();
-      window.setTimeout(() => {
-        if (this._tested === scope) {
-          this._tested = null;
-          this._renderPopup();
-        }
-      }, 4000);
+      try {
+        const answer = await this._hass.callService(
+          "herold",
+          "alarm_test",
+          data,
+          undefined,
+          false,
+          true
+        );
+        this._tested = { scope, result: answer?.response || {} };
+      } catch (err) {
+        this._tested = { scope, result: { error: String(err.message || err) } };
+      }
+      this._renderPopup();
+    }
+
+    _renderTestResult() {
+      const state = this._tested;
+      if (!state) return "";
+      const what = state.scope === "light" ? "Licht" : "Ton";
+      if (state.busy) {
+        return `<div class="drop-state">${what}-Test läuft …</div>`;
+      }
+      const result = state.result || {};
+      if (result.error) {
+        return `<div class="drop-state error">
+          <ha-icon icon="mdi:alert-circle"></ha-icon>
+          <span>${esc(result.hint || result.error)}</span>
+        </div>
+        <div class="hint">${esc(result.error)}</div>`;
+      }
+      if (state.scope === "light") {
+        const entities = result.entities || [];
+        return entities.length
+          ? `<div class="drop-state ok">
+               <ha-icon icon="mdi:check"></ha-icon>
+               <span>${esc(
+                 entities.map((id) => nameOf(this._hass, id)).join(", ")
+               )} — geht in ${esc(result.restore_in ?? 12)} s zurück</span>
+             </div>`
+          : `<div class="drop-state error">
+               <ha-icon icon="mdi:alert-circle"></ha-icon>
+               <span>Für diesen Wecker ist kein Licht konfiguriert.</span>
+             </div>`;
+      }
+      const where =
+        nameOf(this._hass, result.media_player || result.satellite) ||
+        result.target;
+      return result.sound
+        ? `<div class="drop-state ok">
+             <ha-icon icon="mdi:check"></ha-icon>
+             <span>Spielt auf <b>${esc(where)}</b></span>
+           </div>`
+        : `<div class="drop-state error">
+             <ha-icon icon="mdi:alert-circle"></ha-icon>
+             <span>Kein Ausgabegerät gefunden — wähle unten ein festes
+               Ziel.</span>
+           </div>`;
     }
 
     // -- Where it rings ---------------------------------------------------
 
     _renderTargetField(draft, alarm) {
+      const { speakers, displays } = this._speakers();
+      const option = ([id, name]) =>
+        `<option value="${esc(id)}" ${
+          draft.target === id ? "selected" : ""
+        }>${esc(name)}</option>`;
       const options = [
         `<option value="">— automatisch wählen —</option>`,
-        ...this._speakers().map(
-          ([id, name]) =>
-            `<option value="${esc(id)}" ${
-              draft.target === id ? "selected" : ""
-            }>${esc(name)}</option>`
-        ),
+        ...speakers.map(option),
+        displays.length
+          ? `<optgroup label="Fernseher — als Wecker meist ungeeignet">
+               ${displays.map(option).join("")}
+             </optgroup>`
+          : "",
       ].join("");
+      const warnDisplay = displays.some(([id]) => id === draft.target)
+        ? `<div class="drop-state error">
+             <ha-icon icon="mdi:alert"></ha-icon>
+             <span>Ein Fernseher schläft nachts und verweigert viele
+               Audioformate. Erst testen.</span>
+           </div>`
+        : "";
 
       // What the backend says it resolves to right now — the answer to
       // "why did that play on the Apple TV".
@@ -1126,6 +1202,7 @@
                    und Schlafzimmer bleiben dann außen vor.
                  </div>`
           }
+          ${warnDisplay}
           ${resolved}
         </div>`;
     }
