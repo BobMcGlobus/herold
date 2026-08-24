@@ -6,6 +6,32 @@ README) are German — see `translations/`. Entity ids below use the English
 names; on a German instance they are the translated ones, e.g.
 `sensor.herold_naechster_wecker` for `sensor.*_next_alarm`.
 
+## 1.4.0 — Your own wake-up sound, and a way to try it
+
+- **Drag an MP3 onto the card.** The sound section of the settings sheet is
+  a drop zone: the file is uploaded into the Home Assistant media library,
+  stored as that alarm's sound and resolved to a playable URL at ring time,
+  so players that do not understand `media-source://` ids work too. MP3,
+  M4A, WAV, OGG and FLAC; needs a writable media source (`media_dirs`)
+- **Music Assistant stops guessing.** The card now searches it — pick a
+  media type, search, tap a result, and the exact URI is stored instead of a
+  name that might match anything. New `sound_media_type` field (`track`,
+  `album`, `artist`, `playlist`, `radio`) for the YAML and automation route,
+  passed on to Music Assistant. New service `herold.alarm_search_media`
+  returns the same results as a service response
+- Music Assistant playback now **replaces** the queue instead of appending
+  to it, so last night's playlist no longer plays before the alarm
+- **Test the alarm without waiting for morning.** `herold.alarm_test` rings
+  now — `scope: sound | light | cover | all`, with an optional volume
+  override and an optional alarm id to test one alarm's own sound. Lights
+  and blinds are snapshotted into a scene beforehand and restored after a
+  few seconds, so a test at 22:00 does not leave the bedroom lit
+- The settings sheet gained *Ton testen* and *Licht testen* chips, and two
+  new buttons (`button.*_test_alarm_sound`, `button.*_test_alarm_light`)
+  make the same thing available on a dashboard
+- Switching sound mode clears the previous mode's value — a built-in tone
+  name left over in a Music Assistant field was never going to play
+
 ## 1.3.0 — The alarm card grows up
 
 - **Settings live in a popup now.** Tapping an alarm opens a sheet instead of

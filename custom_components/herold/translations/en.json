@@ -361,6 +361,12 @@
     "button": {
       "test": {
         "name": "Test notification"
+      },
+      "alarm_test_sound": {
+        "name": "Test alarm sound"
+      },
+      "alarm_test_light": {
+        "name": "Test alarm light"
       }
     }
   },
@@ -690,6 +696,46 @@
         "id": {
           "name": "Alarm ID",
           "description": "The alarm to skip once."
+        }
+      }
+    },
+    "alarm_test": {
+      "name": "Test alarm",
+      "description": "Rings the alarm now so you can check the speaker, the volume and the sunrise lights without waiting for the morning.",
+      "fields": {
+        "id": {
+          "name": "Alarm ID",
+          "description": "Test this alarm's sound and volume; defaults to the standard settings."
+        },
+        "scope": {
+          "name": "What to test",
+          "description": "Sound, the sunrise lights, the blinds, or everything at once."
+        },
+        "volume": {
+          "name": "Volume",
+          "description": "Overrides the volume floor for this test only."
+        },
+        "seconds": {
+          "name": "Restore after",
+          "description": "How long lights and blinds stay in the tested state before the previous state is restored."
+        }
+      }
+    },
+    "alarm_search_media": {
+      "name": "Search wake-up media",
+      "description": "Searches Music Assistant and returns pickable results, so an alarm can store an exact media URI instead of a guessed name.",
+      "fields": {
+        "query": {
+          "name": "Search term",
+          "description": "Playlist, album, artist, track or radio station to look for."
+        },
+        "media_type": {
+          "name": "Media type",
+          "description": "Narrows the search; leave empty to search everything."
+        },
+        "limit": {
+          "name": "Results",
+          "description": "How many results to return."
         }
       }
     }

@@ -209,7 +209,32 @@ columns: 2
 
 Die Stile und ihre Tokens sind die der [Weatherglass](https://github.com/BobMcGlobus/Weatherglass)-Karte — auf einem gemeinsamen Dashboard passen beide zusammen. Alles ist auch im visuellen Karteneditor einstellbar.
 
-**Weckton** — vier Töne liegen bei (Glocke, Piepen, Sirene, Sonnenaufgang; von `scripts/generate_sounds.py` synthetisiert, daher ohne Lizenzfragen). `sound_mode` wählt die Quelle: `builtin`, `media` (beliebige Mediendatei, z.B. selbst hochgeladen), `music_assistant`, oder `announce` für das alte reine Sprechen. Die Ansage ist optional und folgt dem Ton.
+**Weckton** — vier Töne liegen bei (Glocke, Piepen, Sirene, Sonnenaufgang; von `scripts/generate_sounds.py` synthetisiert, daher ohne Lizenzfragen). `sound_mode` wählt die Quelle:
+
+| Modus | Was in `sound` steht |
+|---|---|
+| `builtin` | `chime`, `beep`, `siren` oder `sunrise` |
+| `media` | eine Medien-ID oder URL — `media-source://media_source/local/wecker.mp3`, `https://…/wecker.mp3` |
+| `music_assistant` | eine Music-Assistant-URI (`library://playlist/12`), oder ein einfacher Name plus `sound_media_type` |
+| `announce` | nichts; der Wecker spricht nur |
+
+Die Ansage ist optional und folgt dem Ton.
+
+**Eigene MP3 einfach fallen lassen.** Eine Audiodatei auf den Klang-Bereich der Karte ziehen: sie wird in deine Home-Assistant-Medienbibliothek hochgeladen, als `sound` des Weckers gespeichert und beim Klingeln in eine abspielbare URL aufgelöst. Dafür muss die Medienquelle beschreibbar sein — mit `default_config` ist das der `media_dirs`-Ordner (in einer Standardinstallation `/media`). Unterstützt: MP3, M4A, WAV, OGG, FLAC.
+
+**Music Assistant** muss wissen, *wonach* es sucht. Statt einen Namen einzutippen und zu hoffen, sucht die Karte: Medientyp wählen, suchen, Treffer antippen — gespeichert wird die exakte URI. Aus YAML oder einer Automation setzt du `sound_media_type` (`track`, `album`, `artist`, `playlist`, `radio`) zusammen mit einem einfachen Namen, oder du übergibst gleich eine URI und lässt den Typ weg. Die Warteschlange wird ersetzt statt ergänzt, damit nicht erst die Playlist von gestern Abend läuft. `herold.alarm_search_media` bietet dieselbe Suche als Service mit Antwort.
+
+**Vorher ausprobieren** — `herold.alarm_test` klingelt sofort:
+
+```yaml
+action: herold.alarm_test
+data:
+  scope: sound      # sound · light · cover · all
+  volume: 0.4       # optional, überschreibt die Untergrenze für diesen Test
+  # id: a1b2c3d4    # testet die Klangeinstellungen eines bestimmten Weckers
+```
+
+In der Karte gibt es dafür die Chips *Ton testen* und *Licht testen*, und für ein Dashboard zwei Buttons (`button.*_weckton_testen` / `button.*_weckerlicht_testen`). Licht und Rolläden werden vor dem Test in einer Szene gesichert und danach wiederhergestellt (Standard 12 s) — ein Test um 22:00 lässt das Schlafzimmer also nicht erleuchtet zurück.
 
 **Hartnäckigkeit** bestimmt, wie zäh er ist:
 

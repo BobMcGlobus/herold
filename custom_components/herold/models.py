@@ -263,6 +263,9 @@ class Alarm:
     urgency: str = URGENCY_NORMAL
     sound_mode: str = SOUND_MODE_BUILTIN
     sound: str | None = DEFAULT_BUILTIN_SOUND
+    # Only for Music Assistant: track/album/artist/playlist/radio. Naming it
+    # turns a plain "Morning Playlist" from a guess into a lookup.
+    sound_media_type: str | None = None
     announce: bool = True
     voice_snooze: bool = False
     routine: str | None = None
@@ -362,6 +365,7 @@ class Alarm:
             "sound": self.sound,
             "announce": self.announce,
             "voice_snooze": self.voice_snooze,
+            "sound_media_type": self.sound_media_type,
             "routine": self.routine,
             "workday_only": self.workday_only,
             "valid_until": (
@@ -391,6 +395,7 @@ class Alarm:
             sound=data.get("sound", DEFAULT_BUILTIN_SOUND),
             announce=data.get("announce", True),
             voice_snooze=data.get("voice_snooze", False),
+            sound_media_type=data.get("sound_media_type"),
             routine=data.get("routine"),
             workday_only=data.get("workday_only", False),
             valid_until=_parse_datetime(data.get("valid_until")),

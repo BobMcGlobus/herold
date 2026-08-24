@@ -1,4 +1,9 @@
-"""Test button for the Herold integration."""
+"""Test buttons for the Herold integration.
+
+Waiting until 06:30 to discover that the speaker is muted or that the wrong
+blind opens is a bad way to learn it, so the alarm is testable on demand —
+here as buttons, in the card as chips, and via `herold.alarm_test`.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +11,13 @@ from typing import TYPE_CHECKING
 
 from homeassistant.components.button import ButtonEntity
 
-from .const import DOMAIN, PRIORITY_NORMAL, TEST_NOTIFICATION_MESSAGE
+from .const import (
+    DOMAIN,
+    PRIORITY_NORMAL,
+    TEST_NOTIFICATION_MESSAGE,
+    TEST_SCOPE_LIGHT,
+    TEST_SCOPE_SOUND,
+)
 from .entity import HeroldEntity
 from .models import Notification
 
@@ -25,7 +36,13 @@ async def async_setup_entry(
 ) -> None:
     """Set up the button platform."""
     coordinator: HeroldCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([HeroldTestButton(coordinator)])
+    async_add_entities(
+        [
+            HeroldTestButton(coordinator),
+            HeroldAlarmTestButton(coordinator, TEST_SCOPE_SOUND),
+            HeroldAlarmTestButton(coordinator, TEST_SCOPE_LIGHT),
+        ]
+    )
 
 
 class HeroldTestButton(HeroldEntity, ButtonEntity):
@@ -44,3 +61,23 @@ class HeroldTestButton(HeroldEntity, ButtonEntity):
             message=TEST_NOTIFICATION_MESSAGE, priority=PRIORITY_NORMAL
         )
         await self.coordinator.async_send(notification)
+
+
+class HeroldAlarmTestButton(HeroldEntity, ButtonEntity):
+    """Runs the alarm's sound or its sunrise light once, right now."""
+
+    _ICONS = {
+        TEST_SCOPE_SOUND: "mdi:volume-high",
+        TEST_SCOPE_LIGHT: "mdi:lightbulb-on",
+    }
+
+    def __init__(self, coordinator: HeroldCoordinator, scope: str) -> None:
+        super().__init__(coordinator)
+        self._scope = scope
+        self._attr_translation_key = f"alarm_test_{scope}"
+        self._attr_icon = self._ICONS[scope]
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_alarm_test_{scope}"
+
+    async def async_press(self) -> None:
+        """Test the alarm with the standard settings."""
+        await self.coordinator.alarm_output.async_test(None, scope=self._scope)

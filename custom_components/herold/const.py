@@ -290,6 +290,28 @@ BUILTIN_SOUNDS: Final = ("chime", "beep", "siren", "sunrise")
 DEFAULT_BUILTIN_SOUND: Final = "chime"
 SOUND_URL_PATH: Final = "sounds"
 
+# What a Music Assistant search may look for. Naming the type is what turns
+# "Morning Playlist" from a guess into a lookup.
+MEDIA_TYPES: Final = ("track", "album", "artist", "playlist", "radio")
+DEFAULT_SEARCH_LIMIT: Final = 8
+MAX_SEARCH_LIMIT: Final = 25
+
+# --- Testing the alarm without waiting for it -----------------------------
+TEST_SCOPE_SOUND: Final = "sound"
+TEST_SCOPE_LIGHT: Final = "light"
+TEST_SCOPE_COVER: Final = "cover"
+TEST_SCOPE_ALL: Final = "all"
+TEST_SCOPES: Final = (
+    TEST_SCOPE_SOUND,
+    TEST_SCOPE_LIGHT,
+    TEST_SCOPE_COVER,
+    TEST_SCOPE_ALL,
+)
+# How long a light or cover test stays in the tested state before the
+# snapshot is put back. Long enough to see it, short enough not to matter.
+DEFAULT_TEST_SECONDS: Final = 12
+TEST_SNAPSHOT_SCENE: Final = "scene.herold_alarm_test_snapshot"
+
 # --- Pre-alarm phase ------------------------------------------------------
 # Lights may come up long before the sound; blinds much later, because an
 # open blind at 06:10 is far more intrusive than a dim lamp.
@@ -328,6 +350,8 @@ SERVICE_ALARM_SNOOZE: Final = "alarm_snooze"
 SERVICE_ALARM_DISMISS: Final = "alarm_dismiss"
 SERVICE_ALARM_UPDATE: Final = "alarm_update"
 SERVICE_ALARM_SKIP_NEXT: Final = "alarm_skip_next"
+SERVICE_ALARM_TEST: Final = "alarm_test"
+SERVICE_ALARM_SEARCH_MEDIA: Final = "alarm_search_media"
 
 EVENT_ALARM_SET: Final = "herold_alarm_set"
 EVENT_ALARM_TRIGGERED: Final = "herold_alarm_triggered"
@@ -344,12 +368,18 @@ ATTR_KEY: Final = "key"
 ATTR_URGENCY: Final = "urgency"
 ATTR_SOUND: Final = "sound"
 ATTR_SOUND_MODE: Final = "sound_mode"
+ATTR_SOUND_MEDIA_TYPE: Final = "sound_media_type"
 ATTR_ANNOUNCE: Final = "announce"
 ATTR_VOICE_SNOOZE: Final = "voice_snooze"
 ATTR_ROUTINE: Final = "routine"
 ATTR_WORKDAY_ONLY: Final = "workday_only"
 ATTR_VALID_UNTIL: Final = "valid_until"
 ATTR_ENABLED: Final = "enabled"
+ATTR_SCOPE: Final = "scope"
+ATTR_QUERY: Final = "query"
+ATTR_MEDIA_TYPE: Final = "media_type"
+ATTR_LIMIT: Final = "limit"
+ATTR_SECONDS: Final = "seconds"
 
 DEFAULT_ALARM_MESSAGE: Final = "Guten Morgen! Zeit aufzustehen."
 

@@ -12,6 +12,10 @@
     "alarm_snooze": "mdi:alarm-snooze",
     "alarm_dismiss": "mdi:alarm-check",
     "dnd_on": "mdi:bell-off",
-    "dnd_off": "mdi:bell-ring"
+    "dnd_off": "mdi:bell-ring",
+    "alarm_test": "mdi:alarm-bell",
+    "alarm_search_media": "mdi:music-box-multiple",
+    "alarm_update": "mdi:alarm-note",
+    "alarm_skip_next": "mdi:debug-step-over"
   }
 }

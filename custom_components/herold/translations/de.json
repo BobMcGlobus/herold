@@ -361,6 +361,12 @@
     "button": {
       "test": {
         "name": "Testnachricht"
+      },
+      "alarm_test_sound": {
+        "name": "Weckton testen"
+      },
+      "alarm_test_light": {
+        "name": "Weckerlicht testen"
       }
     }
   },
@@ -690,6 +696,46 @@
         "id": {
           "name": "Wecker-ID",
           "description": "Der einmalig zu überspringende Wecker."
+        }
+      }
+    },
+    "alarm_test": {
+      "name": "Wecker testen",
+      "description": "Lässt den Wecker jetzt klingeln, damit du Lautsprecher, Lautstärke und Sonnenaufgangslicht prüfen kannst, ohne bis zum Morgen zu warten.",
+      "fields": {
+        "id": {
+          "name": "Wecker-ID",
+          "description": "Testet Ton und Lautstärke dieses Weckers; ohne Angabe die Standardeinstellungen."
+        },
+        "scope": {
+          "name": "Was testen",
+          "description": "Ton, das Sonnenaufgangslicht, die Rolläden oder alles zusammen."
+        },
+        "volume": {
+          "name": "Lautstärke",
+          "description": "Überschreibt die Untergrenze nur für diesen Test."
+        },
+        "seconds": {
+          "name": "Zurücksetzen nach",
+          "description": "Wie lange Licht und Rolläden im Testzustand bleiben, bevor der vorherige Zustand wiederhergestellt wird."
+        }
+      }
+    },
+    "alarm_search_media": {
+      "name": "Weckmedien suchen",
+      "description": "Durchsucht Music Assistant und liefert auswählbare Treffer, damit ein Wecker eine exakte Medien-URI speichert statt eines geratenen Namens.",
+      "fields": {
+        "query": {
+          "name": "Suchbegriff",
+          "description": "Playlist, Album, Interpret, Titel oder Radiosender."
+        },
+        "media_type": {
+          "name": "Medientyp",
+          "description": "Grenzt die Suche ein; leer lassen sucht überall."
+        },
+        "limit": {
+          "name": "Treffer",
+          "description": "Wie viele Treffer geliefert werden."
         }
       }
     }

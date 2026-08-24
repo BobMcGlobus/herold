@@ -66,7 +66,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # Optional alarm fields the editor may empty out again.
 _CLEARABLE_ALARM_FIELDS: Final = frozenset(
-    {"label", "key", "routine", "sound", "valid_until"}
+    {"label", "key", "routine", "sound", "sound_media_type", "valid_until"}
 )
 
 

@@ -65,6 +65,24 @@
     ["sunrise", "Sonnenaufgang"],
   ];
 
+  const MEDIA_TYPES = [
+    ["playlist", "Playlist"],
+    ["album", "Album"],
+    ["artist", "Interpret"],
+    ["track", "Titel"],
+    ["radio", "Radio"],
+  ];
+
+  const MEDIA_LABELS = Object.fromEntries(MEDIA_TYPES);
+
+  const MEDIA_ICONS = {
+    playlist: "mdi:playlist-music",
+    album: "mdi:album",
+    artist: "mdi:account-music",
+    track: "mdi:music-note",
+    radio: "mdi:radio",
+  };
+
   const ACCENTS = {
     gentle: "var(--info-color, #4fc3f7)",
     normal: "var(--primary-color, #03a9f4)",
@@ -105,6 +123,15 @@
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  /** The bit of a media id worth showing: the file name. */
+  const mediaLabel = (id) => {
+    try {
+      return decodeURIComponent(String(id).split("/").pop()) || id;
+    } catch {
+      return id;
+    }
   };
 
   /** ISO -> the "YYYY-MM-DDTHH:MM" an <input type="datetime-local"> wants. */
@@ -215,6 +242,7 @@
             urgency: alarm.urgency || "normal",
             sound_mode: alarm.sound_mode || "builtin",
             sound: alarm.sound || "chime",
+            sound_media_type: alarm.sound_media_type || "",
             announce: alarm.announce !== false,
             workday_only: !!alarm.workday_only,
             voice_snooze: !!alarm.voice_snooze,
@@ -231,6 +259,7 @@
             urgency: "normal",
             sound_mode: "builtin",
             sound: "chime",
+            sound_media_type: "",
             announce: true,
             workday_only: false,
             voice_snooze: false,
@@ -242,6 +271,9 @@
       this._editing = alarm ? alarm.id : "new";
       this._advanced = false;
       this._popupFresh = true;
+      this._upload = null;
+      this._search = null;
+      this._tested = null;
     }
 
     _closeEditor() {
@@ -276,11 +308,37 @@
       } else if (action === "urgency") {
         draft.urgency = value;
       } else if (action === "sound-mode") {
+        // Each mode means something different by "sound", so a leftover
+        // value from the previous one would be nonsense.
+        if (value !== draft.sound_mode) draft.sound = "";
         draft.sound_mode = value;
         if (value === "builtin" && !SOUNDS.some(([key]) => key === draft.sound)) {
           draft.sound = "chime";
         }
         if (value === "announce") draft.announce = true;
+        this._upload = null;
+        this._search = null;
+      } else if (action === "media-type") {
+        draft.sound_media_type = draft.sound_media_type === value ? "" : value;
+      } else if (action === "clear-sound") {
+        draft.sound = "";
+        this._upload = null;
+        this._search = { ...this._search, pickedName: null };
+      } else if (action === "pick") {
+        const item = (this._search?.results || [])[Number(value)];
+        if (!item) return;
+        draft.sound = item.uri;
+        draft.sound_media_type = item.media_type || draft.sound_media_type;
+        this._search = { ...this._search, pickedName: item.name };
+      } else if (action === "search") {
+        this._search_();
+        return;
+      } else if (action === "test-sound") {
+        this._test("sound");
+        return;
+      } else if (action === "test-light") {
+        this._test("light");
+        return;
       } else if (action === "sound") {
         draft.sound = value;
         this._preview(value);
@@ -321,8 +379,20 @@
     }
 
     _onInput(event) {
+      if (!this._draft) return;
+      const search = event.target.closest("[data-search]");
+      if (search) {
+        // Kept out of the draft: it is a query, not a setting.
+        this._search = { ...this._search, query: search.value };
+        return;
+      }
+      const picker = event.target.closest("[data-file]");
+      if (picker) {
+        this._uploadFile(picker.files?.[0]);
+        return;
+      }
       const el = event.target.closest("[data-field]");
-      if (!el || !this._draft) return;
+      if (!el) return;
       const field = el.dataset.field;
       const before = this._draft[field];
       this._draft[field] = el.type === "checkbox" ? el.checked : el.value;
@@ -354,6 +424,8 @@
         urgency: draft.urgency,
         sound_mode: draft.sound_mode,
         sound: draft.sound_mode === "announce" ? "" : draft.sound,
+        sound_media_type:
+          draft.sound_mode === "music_assistant" ? draft.sound_media_type : "",
         announce: !!draft.announce,
         workday_only: !!draft.workday_only,
         voice_snooze: !!draft.voice_snooze,
@@ -560,6 +632,33 @@
           </div>
         </div>`;
       this._popupFresh = false;
+      this._wirePopup();
+    }
+
+    /** Listeners the delegated click handler cannot express. */
+    _wirePopup() {
+      const drop = this._popupHost.querySelector("[data-drop]");
+      if (drop) {
+        const picker = drop.querySelector("[data-file]");
+        drop.addEventListener("click", () => picker.click());
+        drop.addEventListener("dragover", (event) => {
+          event.preventDefault();
+          drop.classList.add("over");
+        });
+        drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+        drop.addEventListener("drop", (event) => {
+          event.preventDefault();
+          drop.classList.remove("over");
+          this._uploadFile(event.dataTransfer?.files?.[0]);
+        });
+      }
+      this._popupHost
+        .querySelector("[data-search]")
+        ?.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          this._search_();
+        });
     }
 
     _renderForm(draft, isNew, alarm) {
@@ -603,17 +702,9 @@
             <ha-icon icon="mdi:play"></ha-icon> Anhören
           </button>`;
       } else if (draft.sound_mode === "media") {
-        soundBlock = `
-          <input type="text" data-field="sound" value="${esc(draft.sound || "")}"
-            placeholder="media-source://… oder https://…/wecker.mp3">
-          <div class="hint">Alles, was der Lautsprecher abspielen kann.</div>`;
+        soundBlock = this._renderMediaBlock(draft);
       } else if (draft.sound_mode === "music_assistant") {
-        soundBlock = `
-          <input type="text" data-field="sound" value="${esc(draft.sound || "")}"
-            placeholder="z.B. Morning Playlist">
-          <div class="hint">
-            Suchbegriff für Music Assistant — Playlist, Album oder Radiosender.
-          </div>`;
+        soundBlock = this._renderMusicAssistantBlock(draft);
       } else {
         soundBlock = `<div class="hint">
           Kein Ton, nur die gesprochene Nachricht. Zum Aufwachen selten genug.
@@ -671,6 +762,31 @@
             <label>Klang</label>
             <div class="pills">${modePills}</div>
             ${soundBlock}
+          </div>
+
+          <div class="field">
+            <label>Ausprobieren</label>
+            <div class="chips">
+              <button class="chip ${this._tested === "sound" ? "on" : ""}"
+                data-action="test-sound">
+                <ha-icon icon="${
+                  this._tested === "sound" ? "mdi:check" : "mdi:volume-high"
+                }"></ha-icon>
+                Ton testen
+              </button>
+              <button class="chip ${this._tested === "light" ? "on" : ""}"
+                data-action="test-light">
+                <ha-icon icon="${
+                  this._tested === "light" ? "mdi:check" : "mdi:lightbulb-on"
+                }"></ha-icon>
+                Licht testen
+              </button>
+            </div>
+            <div class="hint">
+              Klingelt sofort auf dem echten Ziel — ungespeicherte Änderungen
+              zählen erst nach dem Speichern. Das Licht geht danach von selbst
+              wieder in den vorherigen Zustand.
+            </div>
           </div>
 
           <div class="field">
@@ -736,6 +852,205 @@
               : ""
           }
         </div>`;
+    }
+
+    // -- Own media: drop a file, or paste an id --------------------------
+
+    _renderMediaBlock(draft) {
+      const current = draft.sound || "";
+      const state = this._upload;
+      let status = "";
+      if (state?.busy) {
+        status = `<div class="drop-state">Lade ${esc(state.name)} hoch …</div>`;
+      } else if (state?.error) {
+        status = `<div class="drop-state error">${esc(state.error)}</div>`;
+      } else if (current) {
+        status = `<div class="drop-state ok">
+          <ha-icon icon="mdi:music-note"></ha-icon>
+          <span>${esc(mediaLabel(current))}</span>
+          <button class="chip" data-action="clear-sound">Entfernen</button>
+        </div>`;
+      }
+      return `
+        <div class="drop ${state?.busy ? "busy" : ""}" data-drop>
+          <ha-icon icon="mdi:tray-arrow-up"></ha-icon>
+          <div><b>MP3 hierher ziehen</b> oder klicken zum Auswählen</div>
+          <div class="hint">
+            Die Datei landet in deiner Home-Assistant-Medienbibliothek und wird
+            von dort abgespielt. MP3, M4A, WAV, OGG oder FLAC.
+          </div>
+          <input type="file" accept="audio/*" hidden data-file>
+        </div>
+        ${status}
+        <input type="text" data-field="sound" value="${esc(current)}"
+          placeholder="media-source://media_source/local/wecker.mp3">
+        <div class="hint">
+          Alternativ direkt eine Medien-ID oder eine öffentlich erreichbare
+          URL eintragen.
+        </div>`;
+    }
+
+    async _uploadFile(file) {
+      if (!file) return;
+      if (!/^audio\//.test(file.type || "")) {
+        this._upload = { error: `${file.name} ist keine Audiodatei.` };
+        this._renderPopup();
+        return;
+      }
+      this._upload = { busy: true, name: file.name };
+      this._renderPopup();
+      try {
+        const folder = await this._uploadFolder();
+        const body = new FormData();
+        body.append("media_content_id", folder);
+        body.append("file", file);
+        const response = await this._hass.fetchWithAuth(
+          "/api/media_source/local_source/upload",
+          { method: "POST", body }
+        );
+        if (!response.ok) {
+          throw new Error(`${response.status} ${await response.text()}`);
+        }
+        const result = await response.json();
+        this._draft.sound = result.media_content_id;
+        this._draft.sound_mode = "media";
+        this._upload = null;
+      } catch (err) {
+        this._upload = {
+          error:
+            "Upload fehlgeschlagen: " +
+            String(err.message || err) +
+            " — braucht das Medienverzeichnis (media_dirs) in Home Assistant.",
+        };
+      }
+      this._renderPopup();
+    }
+
+    /** The local media folder uploads go into; browsed, not guessed. */
+    async _uploadFolder() {
+      if (this._folder) return this._folder;
+      try {
+        const root = await this._hass.callWS({
+          type: "media_source/browse_media",
+          media_content_id: "media-source://media_source",
+        });
+        const child = (root.children || []).find(
+          (item) => item.can_expand && item.media_content_id
+        );
+        if (child) this._folder = child.media_content_id;
+      } catch (err) {
+        console.warn("herold: could not browse media sources", err);
+      }
+      return this._folder || "media-source://media_source/local/.";
+    }
+
+    // -- Music Assistant: search instead of guessing ----------------------
+
+    _renderMusicAssistantBlock(draft) {
+      const search = this._search || {};
+      const typePills = MEDIA_TYPES.map(
+        ([key, label]) => `
+          <button class="pill ${draft.sound_media_type === key ? "on" : ""}"
+            data-action="media-type" data-value="${key}">${label}</button>`
+      ).join("");
+
+      let results = "";
+      if (search.busy) {
+        results = `<div class="drop-state">Suche läuft …</div>`;
+      } else if (search.error) {
+        results = `<div class="drop-state error">${esc(search.error)}</div>`;
+      } else if (search.results) {
+        results = search.results.length
+          ? `<div class="results">${search.results
+              .map(
+                (item, index) => `
+                  <button class="result ${
+                    draft.sound === item.uri ? "on" : ""
+                  }" data-action="pick" data-value="${index}">
+                    <ha-icon icon="${MEDIA_ICONS[item.media_type] ||
+                      "mdi:music"}"></ha-icon>
+                    <span class="rname">${esc(item.name)}</span>
+                    <span class="rmeta">${esc(
+                      [MEDIA_LABELS[item.media_type] || item.media_type,
+                       item.artist].filter(Boolean).join(" · ")
+                    )}</span>
+                  </button>`
+              )
+              .join("")}</div>`
+          : `<div class="drop-state">Nichts gefunden.</div>`;
+      }
+
+      const chosen = draft.sound
+        ? `<div class="drop-state ok">
+             <ha-icon icon="mdi:check"></ha-icon>
+             <span>${esc(search.pickedName || draft.sound)}</span>
+             <button class="chip" data-action="clear-sound">Entfernen</button>
+           </div>`
+        : "";
+
+      return `
+        <div class="pills">${typePills}</div>
+        <div class="searchrow">
+          <input type="text" data-search value="${esc(search.query || "")}"
+            placeholder="z.B. Morning Coffee">
+          <button class="btn primary" data-action="search">
+            <ha-icon icon="mdi:magnify"></ha-icon>
+          </button>
+        </div>
+        <div class="hint">
+          Medientyp wählen, suchen, Treffer antippen — gespeichert wird dann
+          die eindeutige Music-Assistant-URI, kein geratener Name.
+        </div>
+        ${results}
+        ${chosen}`;
+    }
+
+    async _search_() {
+      const query = (this._search?.query || "").trim();
+      if (!query) return;
+      this._search = { ...this._search, busy: true, error: null };
+      this._renderPopup();
+      try {
+        const response = await this._hass.callService(
+          "herold",
+          "alarm_search_media",
+          {
+            query,
+            ...(this._draft.sound_media_type
+              ? { media_type: this._draft.sound_media_type }
+              : {}),
+          },
+          undefined,
+          false,
+          true
+        );
+        this._search = {
+          query,
+          results: response?.response?.results || [],
+        };
+      } catch (err) {
+        this._search = {
+          query,
+          error: "Suche fehlgeschlagen: " + String(err.message || err),
+        };
+      }
+      this._renderPopup();
+    }
+
+    // -- Trying it out ----------------------------------------------------
+
+    _test(scope) {
+      const data = { scope };
+      if (this._editing && this._editing !== "new") data.id = this._editing;
+      this._call("alarm_test", data);
+      this._tested = scope;
+      this._renderPopup();
+      window.setTimeout(() => {
+        if (this._tested === scope) {
+          this._tested = null;
+          this._renderPopup();
+        }
+      }, 4000);
     }
 
     _renderAdvanced(draft, routineOptions) {
@@ -1252,6 +1567,83 @@
       cursor: pointer;
     }
     .check input { accent-color: var(--hac-accent); width: 18px; height: 18px; }
+
+    /* ---- upload, search, results --------------------------------------- */
+    .drop {
+      border: 2px dashed color-mix(in srgb, var(--primary-text-color) 22%, transparent);
+      border-radius: 14px;
+      padding: 18px 14px;
+      text-align: center;
+      cursor: pointer;
+      color: var(--secondary-text-color);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .drop:hover, .drop.over {
+      border-color: var(--hac-accent);
+      background: color-mix(in srgb, var(--hac-accent) 8%, transparent);
+    }
+    .drop.busy { opacity: 0.6; pointer-events: none; }
+    .drop ha-icon { --mdc-icon-size: 26px; color: var(--hac-accent); }
+    .drop b { color: var(--primary-text-color); }
+    .drop .hint { margin-top: 4px; }
+    .drop-state {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 12.5px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      color: var(--secondary-text-color);
+      background: color-mix(in srgb, var(--primary-text-color) 6%, transparent);
+    }
+    .drop-state span { flex: 1; min-width: 0; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; }
+    .drop-state ha-icon { --mdc-icon-size: 16px; flex: none; }
+    .drop-state.ok { color: var(--primary-text-color); }
+    .drop-state.ok ha-icon { color: var(--success-color, #43a047); }
+    .drop-state.error {
+      color: var(--error-color, #ef5350);
+      background: color-mix(in srgb, var(--error-color, #ef5350) 12%, transparent);
+    }
+    .searchrow { display: flex; gap: 8px; margin-top: 8px; }
+    .searchrow input { flex: 1; }
+    .searchrow .btn { flex: none; padding: 0 14px; }
+    .results {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 10px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .result {
+      display: grid;
+      grid-template-columns: 24px 1fr auto;
+      align-items: center;
+      gap: 8px;
+      text-align: left;
+      border: none;
+      border-radius: 10px;
+      padding: 9px 10px;
+      cursor: pointer;
+      font: inherit;
+      background: color-mix(in srgb, var(--primary-text-color) 5%, transparent);
+      color: var(--primary-text-color);
+    }
+    .result:hover {
+      background: color-mix(in srgb, var(--hac-accent) 14%, transparent);
+    }
+    .result.on {
+      background: color-mix(in srgb, var(--hac-accent) 22%, transparent);
+      box-shadow: inset 0 0 0 1px var(--hac-accent);
+    }
+    .result ha-icon { --mdc-icon-size: 18px; color: var(--hac-accent); }
+    .rname { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; }
+    .rmeta { font-size: 11px; color: var(--secondary-text-color); }
+    .s-mirror .result { background: rgba(255, 255, 255, 0.1); color: #fff; }
+    .s-mirror .drop-state { background: rgba(255, 255, 255, 0.1); }
     .actions { display: flex; gap: 8px; margin-top: 4px; }
     .actions .btn { flex: 1; padding: 12px 8px; }
   `;

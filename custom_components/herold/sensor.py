@@ -375,6 +375,7 @@ class HeroldNextAlarmSensor(HeroldSignalSensor):
                     "urgency": alarm.urgency,
                     "sound_mode": alarm.sound_mode,
                     "sound": alarm.sound,
+                    "sound_media_type": alarm.sound_media_type,
                     "announce": alarm.announce,
                     "voice_snooze": alarm.voice_snooze,
                     "workday_only": alarm.workday_only,

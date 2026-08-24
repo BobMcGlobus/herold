@@ -268,10 +268,48 @@ editor.
 
 **Sound** — four tones ship with the integration (chime, beep, siren,
 sunrise; synthesised by `scripts/generate_sounds.py`, so no third-party
-audio licensing). `sound_mode` picks the source: `builtin`, `media` (any
-media id, e.g. an uploaded file), `music_assistant`, or `announce` for the
-old speech-only behaviour. The spoken message is optional and follows the
-tone.
+audio licensing). `sound_mode` picks the source:
+
+| Mode | What `sound` holds |
+|---|---|
+| `builtin` | `chime`, `beep`, `siren` or `sunrise` |
+| `media` | a media id or URL — `media-source://media_source/local/wake.mp3`, `https://…/wake.mp3` |
+| `music_assistant` | a Music Assistant URI (`library://playlist/12`), or a plain name if you also set `sound_media_type` |
+| `announce` | nothing; the alarm only speaks |
+
+The spoken message is optional and follows the tone.
+
+**Bring your own MP3.** Drop an audio file onto the card's sound section and
+it is uploaded into your Home Assistant media library, stored as the alarm's
+`sound` and resolved to a playable URL at ring time. This needs the media
+source to be writable — with `default_config` that is the `media_dirs`
+folder (`/media` in a standard install). Supported: MP3, M4A, WAV, OGG,
+FLAC.
+
+**Music Assistant** wants to know *what* it is looking for. Rather than
+typing a name and hoping, the card searches: pick a media type, search, tap
+a result, and the exact URI is stored. From YAML or an automation, set
+`sound_media_type` (`track`, `album`, `artist`, `playlist`, `radio`)
+alongside a plain name, or pass a URI and leave the type out. The queue is
+replaced rather than appended to, so last night's playlist does not play
+first. `herold.alarm_search_media` exposes the same search and returns a
+response.
+
+**Test it before you rely on it** — `herold.alarm_test` rings now:
+
+```yaml
+action: herold.alarm_test
+data:
+  scope: sound      # sound · light · cover · all
+  volume: 0.4       # optional, overrides the floor for this test
+  # id: a1b2c3d4    # test one alarm's own sound settings
+```
+
+The card has *Ton testen* and *Licht testen* chips in the settings sheet,
+and there are two buttons (`button.*_test_alarm_sound` /
+`button.*_test_alarm_light`) for a dashboard. Lights and blinds are
+snapshotted before the test and restored afterwards (default 12 s), so a
+test at 22:00 does not leave the bedroom lit.
 
 **Urgency** decides how stubborn it is:
 

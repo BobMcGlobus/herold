@@ -320,6 +320,16 @@ alarm_set:
       example: chime
       selector:
         text:
+    sound_media_type:
+      example: playlist
+      selector:
+        select:
+          options:
+            - track
+            - album
+            - artist
+            - playlist
+            - radio
     announce:
       selector:
         boolean:
@@ -399,6 +409,16 @@ alarm_update:
       example: chime
       selector:
         text:
+    sound_media_type:
+      example: playlist
+      selector:
+        select:
+          options:
+            - track
+            - album
+            - artist
+            - playlist
+            - radio
     announce:
       selector:
         boolean:
@@ -460,6 +480,62 @@ alarm_dismiss:
       example: a1b2c3d4
       selector:
         text:
+
+alarm_test:
+  fields:
+    id:
+      example: a1b2c3d4
+      selector:
+        text:
+    scope:
+      required: true
+      default: sound
+      selector:
+        select:
+          options:
+            - sound
+            - light
+            - cover
+            - all
+    volume:
+      required: true
+      default: 0.4
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+    seconds:
+      example: 12
+      selector:
+        number:
+          min: 1
+          max: 300
+          unit_of_measurement: s
+
+alarm_search_media:
+  fields:
+    query:
+      required: true
+      example: Morning Playlist
+      selector:
+        text:
+    media_type:
+      example: playlist
+      selector:
+        select:
+          options:
+            - track
+            - album
+            - artist
+            - playlist
+            - radio
+    limit:
+      example: 8
+      selector:
+        number:
+          min: 1
+          max: 25
 
 dnd_on:
   fields:

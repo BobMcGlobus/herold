@@ -5,7 +5,13 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+    callback,
+)
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 import voluptuous as vol
@@ -28,16 +34,22 @@ from .const import (
     ATTR_INSTRUCTION,
     ATTR_KEY,
     ATTR_LABEL,
+    ATTR_LIMIT,
+    ATTR_MEDIA_TYPE,
     ATTR_MESSAGE,
     ATTR_MINUTES,
     ATTR_MODE,
     ATTR_PRIORITY,
+    ATTR_QUERY,
     ATTR_QUESTION,
     ATTR_REASON,
     ATTR_RECIPIENT,
     ATTR_ROUTINE,
     ATTR_SCHEDULED_FOR,
+    ATTR_SCOPE,
+    ATTR_SECONDS,
     ATTR_SOUND,
+    ATTR_SOUND_MEDIA_TYPE,
     ATTR_SOUND_MODE,
     ATTR_SOURCE,
     ATTR_TAG,
@@ -57,6 +69,7 @@ from .const import (
     ATTR_VALID_UNTIL,
     ATTR_VOICE_SNOOZE,
     ATTR_VOICE_TIMEOUT_SECONDS,
+    ATTR_VOLUME,
     ATTR_WHEN,
     ATTR_WORKDAY_ONLY,
     CONF_RECIPIENT,
@@ -65,16 +78,20 @@ from .const import (
     DEFAULT_WATCH_TTL_HOURS,
     DOMAIN,
     LEGACY_DEFAULT_CALLBACK,
+    MAX_SEARCH_LIMIT,
     MAX_WATCH_TTL_HOURS,
+    MEDIA_TYPES,
     PRIORITY_INTERNAL,
     QUERY_MODE_CHOICE,
     QUERY_MODES,
     SERVICE_ACKNOWLEDGE,
     SERVICE_ALARM_CANCEL,
     SERVICE_ALARM_DISMISS,
+    SERVICE_ALARM_SEARCH_MEDIA,
     SERVICE_ALARM_SET,
     SERVICE_ALARM_SKIP_NEXT,
     SERVICE_ALARM_SNOOZE,
+    SERVICE_ALARM_TEST,
     SERVICE_ALARM_UPDATE,
     SERVICE_CANCEL,
     SERVICE_DND_OFF,
@@ -85,6 +102,8 @@ from .const import (
     SERVICE_SEND,
     SERVICE_WATCH,
     SOUND_MODES,
+    TEST_SCOPE_SOUND,
+    TEST_SCOPES,
     URGENCY_LEVELS,
     WEEKDAYS,
 )
@@ -177,6 +196,7 @@ _ALARM_FIELDS = {
     vol.Optional(ATTR_MESSAGE): cv.string,
     vol.Optional(ATTR_URGENCY): vol.In(URGENCY_LEVELS),
     vol.Optional(ATTR_SOUND_MODE): vol.In(SOUND_MODES),
+    vol.Optional(ATTR_SOUND_MEDIA_TYPE): vol.Any("", vol.In(MEDIA_TYPES)),
     vol.Optional(ATTR_SOUND): cv.string,
     vol.Optional(ATTR_ANNOUNCE): cv.boolean,
     vol.Optional(ATTR_VOICE_SNOOZE): cv.boolean,
@@ -214,6 +234,29 @@ ALARM_SNOOZE_SCHEMA = vol.Schema(
 )
 
 ALARM_DISMISS_SCHEMA = vol.Schema({vol.Optional(ATTR_ID): cv.string})
+
+ALARM_TEST_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_ID): cv.string,
+        vol.Optional(ATTR_SCOPE, default=TEST_SCOPE_SOUND): vol.In(TEST_SCOPES),
+        vol.Optional(ATTR_VOLUME): vol.All(
+            vol.Coerce(float), vol.Range(min=0.0, max=1.0)
+        ),
+        vol.Optional(ATTR_SECONDS): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=300)
+        ),
+    }
+)
+
+ALARM_SEARCH_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_QUERY): cv.string,
+        vol.Optional(ATTR_MEDIA_TYPE): vol.In(MEDIA_TYPES),
+        vol.Optional(ATTR_LIMIT): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=MAX_SEARCH_LIMIT)
+        ),
+    }
+)
 
 DND_ON_SCHEMA = vol.Schema(
     {
@@ -433,6 +476,7 @@ def _alarm_changes(data: dict) -> dict:
         ATTR_MESSAGE,
         ATTR_URGENCY,
         ATTR_SOUND_MODE,
+        ATTR_SOUND_MEDIA_TYPE,
         ATTR_SOUND,
         ATTR_ANNOUNCE,
         ATTR_VOICE_SNOOZE,
@@ -472,6 +516,32 @@ async def _async_handle_alarm_update(call: ServiceCall) -> None:
     await coordinator.alarms.async_update(
         call.data[ATTR_ID], _alarm_changes(call.data)
     )
+
+
+async def _async_handle_alarm_test(call: ServiceCall) -> ServiceResponse:
+    """Handle herold.alarm_test — ring now instead of at 06:30."""
+    coordinator = _get_coordinator(call.hass)
+    alarm_id = call.data.get(ATTR_ID)
+    alarm = coordinator.alarms.alarms.get(alarm_id) if alarm_id else None
+    if alarm_id and alarm is None:
+        raise HomeAssistantError(f"Unknown alarm id: {alarm_id}")
+    return await coordinator.alarm_output.async_test(
+        alarm,
+        scope=call.data[ATTR_SCOPE],
+        volume=call.data.get(ATTR_VOLUME),
+        seconds=call.data.get(ATTR_SECONDS),
+    )
+
+
+async def _async_handle_alarm_search_media(call: ServiceCall) -> ServiceResponse:
+    """Handle herold.alarm_search_media — Music Assistant lookup."""
+    coordinator = _get_coordinator(call.hass)
+    results = await coordinator.alarm_output.async_search_media(
+        call.data[ATTR_QUERY],
+        media_type=call.data.get(ATTR_MEDIA_TYPE),
+        limit=call.data.get(ATTR_LIMIT),
+    )
+    return {"results": results}
 
 
 async def _async_handle_alarm_skip_next(call: ServiceCall) -> None:
@@ -520,6 +590,15 @@ async def _async_handle_dnd_off(call: ServiceCall) -> None:
     coordinator.set_master_dnd(False)
 
 
+_RESPONSE_SERVICES = (
+    (SERVICE_ALARM_TEST, _async_handle_alarm_test, ALARM_TEST_SCHEMA),
+    (
+        SERVICE_ALARM_SEARCH_MEDIA,
+        _async_handle_alarm_search_media,
+        ALARM_SEARCH_SCHEMA,
+    ),
+)
+
 _SERVICES = (
     (SERVICE_SEND, _async_handle_send, SEND_SCHEMA),
     (SERVICE_QUERY, _async_handle_query, QUERY_SCHEMA),
@@ -545,10 +624,19 @@ def async_register_services(hass: HomeAssistant) -> None:
     for name, handler, schema in _SERVICES:
         if not hass.services.has_service(DOMAIN, name):
             hass.services.async_register(DOMAIN, name, handler, schema=schema)
+    for name, handler, schema in _RESPONSE_SERVICES:
+        if not hass.services.has_service(DOMAIN, name):
+            hass.services.async_register(
+                DOMAIN,
+                name,
+                handler,
+                schema=schema,
+                supports_response=SupportsResponse.OPTIONAL,
+            )
 
 
 @callback
 def async_unregister_services(hass: HomeAssistant) -> None:
     """Remove the herold services."""
-    for name, _handler, _schema in _SERVICES:
+    for name, _handler, _schema in (*_SERVICES, *_RESPONSE_SERVICES):
         hass.services.async_remove(DOMAIN, name)
