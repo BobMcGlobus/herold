@@ -177,6 +177,27 @@
       this._fingerprint = null;
     }
 
+    connectedCallback() {
+      // A snooze counts down for nine minutes without a single state change
+      // to react to, so the card has to keep its own time.
+      this._ticker = window.setInterval(() => this._tick(), 1000);
+    }
+
+    disconnectedCallback() {
+      window.clearInterval(this._ticker);
+      this._ticker = null;
+      this._audio?.pause();
+    }
+
+    _tick() {
+      // Only a running snooze needs per-second repainting; everything else
+      // changes state, and a state change repaints on its own.
+      if (!this._hass || this._editing) return;
+      if (this._alarms().some((alarm) => alarm.status === "snoozed")) {
+        this._render();
+      }
+    }
+
     getCardSize() {
       return 5;
     }
@@ -559,10 +580,13 @@
 
     _renderAlarm(alarm) {
       const ringing = alarm.status === "ringing" || alarm.status === "verifying";
+      const snoozed = alarm.status === "snoozed";
       const enabled = alarm.enabled !== false;
       const accent = ringing
         ? "var(--error-color, #ef5350)"
-        : ACCENTS[alarm.urgency] || ACCENTS.normal;
+        : snoozed
+          ? "var(--info-color, #4fc3f7)"
+          : ACCENTS[alarm.urgency] || ACCENTS.normal;
 
       const dots = DAYS.map(
         ([key, label]) =>
@@ -587,23 +611,33 @@
       if (alarm.voice_snooze) badges.push(["mdi:microphone", "Sprach-Snooze"]);
 
       const rel =
-        enabled && !ringing && alarm.next_trigger
+        enabled && !ringing && !snoozed && alarm.next_trigger
           ? fmtRelative(alarm.next_trigger)
           : "";
-      const sub = [alarm.schedule, rel].filter(Boolean).join(" · ");
+      const sub = ringing
+        ? `Klingelt — Durchgang ${alarm.rings || 1}`
+        : [alarm.schedule, rel].filter(Boolean).join(" · ");
 
-      const controls = ringing
-        ? `<div class="ringrow">
-             <button class="btn" data-action="snooze" data-id="${esc(alarm.id)}">
-               <ha-icon icon="mdi:snooze"></ha-icon> Schlummern
-             </button>
-             <button class="btn primary" data-action="dismiss"
-               data-id="${esc(alarm.id)}">Ich bin wach</button>
-           </div>`
-        : "";
+      const controls =
+        ringing || snoozed
+          ? `<div class="ringrow">
+               ${
+                 ringing
+                   ? `<button class="btn" data-action="snooze"
+                        data-id="${esc(alarm.id)}">
+                        <ha-icon icon="mdi:snooze"></ha-icon> Schlummern
+                      </button>`
+                   : ""
+               }
+               <button class="btn primary" data-action="dismiss"
+                 data-id="${esc(alarm.id)}">Ich bin wach</button>
+             </div>`
+          : "";
 
       return `
-        <div class="alarm ${ringing ? "ringing" : enabled ? "" : "off"}"
+        <div class="alarm ${
+          ringing ? "ringing" : snoozed ? "snoozed" : enabled ? "" : "off"
+        }"
           style="--hac-accent:${accent}"
           data-action="edit" data-id="${esc(alarm.id)}">
           <div class="ahead">
@@ -620,7 +654,7 @@
                    data-action="toggle" data-id="${esc(alarm.id)}"
                    aria-label="Wecker an/aus"></button>`
           }
-          <div class="days">${dots}</div>
+          ${snoozed ? this._renderSnooze(alarm) : `<div class="days">${dots}</div>`}
           <div class="asub">${esc(sub)}</div>
           ${
             badges.length
@@ -639,6 +673,27 @@
     }
 
     // -- The settings dialog ----------------------------------------------
+
+    /** A snooze is nine silent minutes; show them running out. */
+    _renderSnooze(alarm) {
+      const endsAt = new Date(alarm.next_trigger).getTime();
+      const remaining = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
+      const total = alarm.snooze_seconds || remaining || 1;
+      const done = Math.min(1, Math.max(0, 1 - remaining / total));
+      const mins = Math.floor(remaining / 60);
+      const secs = String(remaining % 60).padStart(2, "0");
+      return `
+        <div class="snoozebar">
+          <div class="snoozehead">
+            <ha-icon icon="mdi:snooze"></ha-icon>
+            <span>Schlummert</span>
+            <b>${mins}:${secs}</b>
+          </div>
+          <div class="track">
+            <div class="fill" style="width:${(done * 100).toFixed(1)}%"></div>
+          </div>
+        </div>`;
+    }
 
     _renderPopup() {
       if (!this._popupHost) return;
@@ -1528,6 +1583,31 @@
       background: color-mix(in srgb, var(--hac-accent) 14%, transparent);
     }
     .asub { font-size: 12.5px; color: var(--secondary-text-color); }
+    .alarm.snoozed { box-shadow: inset 0 0 0 1px var(--hac-accent); }
+    .snoozebar { display: flex; flex-direction: column; gap: 6px; }
+    .snoozehead {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      color: var(--hac-accent);
+    }
+    .snoozehead ha-icon { --mdc-icon-size: 16px; }
+    .snoozehead span { flex: 1; }
+    .snoozehead b { font-variant-numeric: tabular-nums; font-size: 14px; }
+    .track {
+      height: 5px;
+      border-radius: 3px;
+      overflow: hidden;
+      background: color-mix(in srgb, var(--primary-text-color) 10%, transparent);
+    }
+    .fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--hac-accent);
+      transition: width 1s linear;
+    }
+    .s-mirror .fill { background: #fff; }
     .badges { display: flex; flex-wrap: wrap; gap: 5px; }
     .badge {
       display: inline-flex;

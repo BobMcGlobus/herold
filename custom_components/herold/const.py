@@ -328,6 +328,38 @@ CONF_ALARM_VERIFY_DISMISS: Final = "alarm_verify_dismiss"
 CONF_ALARM_VERIFY_SECONDS: Final = "alarm_verify_seconds"
 DEFAULT_ALARM_VERIFY_DISMISS: Final = True
 DEFAULT_ALARM_VERIFY_SECONDS: Final = 60
+# How long the bed must stay empty before "he got up" is believed. Short
+# enough to stop the noise quickly, long enough that rolling over does not
+# cancel the alarm.
+CONF_ALARM_UP_SECONDS: Final = "alarm_up_seconds"
+DEFAULT_ALARM_UP_SECONDS: Final = 30
+
+# Sound modes that play something long. A tone is re-triggered on every
+# ring; a song must not be, or it restarts every 45 seconds.
+CONTINUOUS_SOUND_MODES: Final = ("media", "music_assistant")
+# Player states that mean "still playing what we started".
+PLAYING_STATES: Final = ("playing", "buffering")
+
+# Voice snooze answers, matched by assist_satellite.ask_question.
+VOICE_ANSWER_SNOOZE: Final = "snooze"
+VOICE_ANSWER_DISMISS: Final = "dismiss"
+VOICE_SNOOZE_SENTENCES: Final = (
+    "schlummern",
+    "snooze",
+    "noch fünf Minuten",
+    "noch etwas schlafen",
+    "später",
+    "ja",
+)
+VOICE_DISMISS_SENTENCES: Final = (
+    "aus",
+    "stopp",
+    "ich bin wach",
+    "ich stehe auf",
+    "aufstehen",
+    "nein",
+)
+VOICE_SNOOZE_QUESTION: Final = "Soll ich schlummern?"
 
 # --- Workday / sick day ---------------------------------------------------
 CONF_ALARM_WORKDAY_SENSOR: Final = "alarm_workday_sensor"

@@ -370,6 +370,7 @@ class HeroldNextAlarmSensor(HeroldSignalSensor):
                     "label": alarm.label,
                     "message": alarm.message,
                     "status": alarm.status,
+                    "rings": alarm.rings,
                     "enabled": alarm.enabled,
                     "schedule": alarm.describe(),
                     "urgency": alarm.urgency,
@@ -391,6 +392,7 @@ class HeroldNextAlarmSensor(HeroldSignalSensor):
                         else None
                     ),
                     "snoozes": alarm.snoozes,
+                    "snooze_seconds": alarm.snooze_seconds,
                     "skip_next": alarm.skip_next,
                     "blocked": manager.is_blocked(alarm),
                     "key": alarm.key,

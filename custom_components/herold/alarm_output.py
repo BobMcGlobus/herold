@@ -33,6 +33,7 @@ from .const import (
     CONF_ALARM_VOLUME_MAX,
     CONF_ALARM_VOLUME_MIN,
     CONF_PRIMARY_TTS,
+    CONTINUOUS_SOUND_MODES,
     DEFAULT_ALARM_COVER_POSITION,
     DEFAULT_ALARM_VOLUME_MAX,
     DEFAULT_ALARM_VOLUME_MIN,
@@ -40,6 +41,7 @@ from .const import (
     DEFAULT_SEARCH_LIMIT,
     DEFAULT_TEST_SECONDS,
     MAX_SEARCH_LIMIT,
+    PLAYING_STATES,
     SOUND_MODE_ANNOUNCE_ONLY,
     SOUND_MODE_MEDIA,
     SOUND_MODE_MUSIC_ASSISTANT,
@@ -49,6 +51,11 @@ from .const import (
     TEST_SCOPE_LIGHT,
     TEST_SCOPE_SOUND,
     TEST_SNAPSHOT_SCENE,
+    VOICE_ANSWER_DISMISS,
+    VOICE_ANSWER_SNOOZE,
+    VOICE_DISMISS_SENTENCES,
+    VOICE_SNOOZE_QUESTION,
+    VOICE_SNOOZE_SENTENCES,
 )
 from .models import Alarm
 
@@ -148,6 +155,9 @@ class AlarmOutput:
             return True
 
         volume = self.volume_for_ring(alarm, ring)
+        if alarm.sound_mode in CONTINUOUS_SOUND_MODES:
+            return await self._async_ring_continuous(alarm, player, satellite, volume)
+
         spoke = False
         async with self.coordinator.volume.announce_at(player, volume):
             if alarm.sound_mode != SOUND_MODE_ANNOUNCE_ONLY:
@@ -166,6 +176,60 @@ class AlarmOutput:
             ):
                 await self._async_speak(player, satellite, alarm.message)
         return True
+
+    async def _async_ring_continuous(
+        self,
+        alarm: Alarm,
+        player: str,
+        satellite: str | None,
+        volume: float,
+    ) -> bool:
+        """Ring an alarm whose sound is a song, not a tone.
+
+        A song is started once and then left alone: re-issuing play_media
+        every 45 seconds restarts the track or skips to the next one, and
+        restoring the volume after each ring makes it fade back mid-song.
+        Later rings only turn it up.
+        """
+        # Held, not scoped: the level must survive until the alarm ends.
+        await self.coordinator.volume.async_hold(player, volume)
+
+        if self.is_playing(player):
+            _LOGGER.debug("Alarm %s already playing on %s, only raising the "
+                          "volume", alarm.id, player)
+            return True
+
+        try:
+            await self._async_play_sound(alarm, player)
+        except HomeAssistantError as err:
+            _LOGGER.error("Alarm %s: %s — falling back to speech", alarm.id, err)
+            await self._async_speak(player, satellite, alarm.message)
+            return True
+        if alarm.announce:
+            await self._async_speak(player, satellite, alarm.message)
+        return True
+
+    def is_playing(self, player: str | None) -> bool:
+        """True while the player is still busy with what we started."""
+        if not player:
+            return False
+        state = self.coordinator.hass.states.get(player)
+        return state is not None and state.state in PLAYING_STATES
+
+    async def async_stop(self, alarm: Alarm) -> None:
+        """Silence the alarm's output and give the volume back.
+
+        Dismissing or snoozing has to actually stop the music; without this
+        the song keeps playing after the alarm is over.
+        """
+        player, _satellite = await self.async_targets(alarm)
+        if player is None:
+            return
+        if self.is_playing(player):
+            await self._async_try("media_player", "media_stop", {
+                "entity_id": player
+            })
+        await self.coordinator.volume.async_release_hold(player)
 
     async def _async_play_sound(self, alarm: Alarm, player: str) -> None:
         """Play the configured wake-up sound on the speaker."""
@@ -318,6 +382,60 @@ class AlarmOutput:
                     }
                 )
         return results[:limit]
+
+    # -- Voice snooze ------------------------------------------------------
+
+    async def async_ask_snooze(self, alarm: Alarm) -> str | None:
+        """Ask the satellite whether to snooze, and return the answer.
+
+        `voice_snooze` used to only route the alarm to a satellite, which
+        announced the message and then listened for nothing at all. The
+        answer has to be asked for.
+        """
+        _player, satellite = await self.async_targets(alarm)
+        if not satellite:
+            _LOGGER.warning(
+                "Alarm %s wants a voice snooze but has no satellite", alarm.id
+            )
+            return None
+        hass = self.coordinator.hass
+        if not hass.services.has_service("assist_satellite", "ask_question"):
+            _LOGGER.warning(
+                "Voice snooze needs assist_satellite.ask_question, which this "
+                "Home Assistant does not have"
+            )
+            return None
+
+        question = alarm.message.rstrip(". ") + ". " + VOICE_SNOOZE_QUESTION
+        try:
+            answer = await hass.services.async_call(
+                "assist_satellite",
+                "ask_question",
+                {
+                    "entity_id": satellite,
+                    "question": question,
+                    "answers": [
+                        {
+                            "id": VOICE_ANSWER_SNOOZE,
+                            "sentences": list(VOICE_SNOOZE_SENTENCES),
+                        },
+                        {
+                            "id": VOICE_ANSWER_DISMISS,
+                            "sentences": list(VOICE_DISMISS_SENTENCES),
+                        },
+                    ],
+                },
+                blocking=True,
+                return_response=True,
+            )
+        except HomeAssistantError as err:
+            _LOGGER.warning("Alarm %s could not ask %s: %s", alarm.id, satellite, err)
+            return None
+        decision = (answer or {}).get("id")
+        _LOGGER.debug("Alarm %s voice answer: %s", alarm.id, decision)
+        if decision in (VOICE_ANSWER_SNOOZE, VOICE_ANSWER_DISMISS):
+            return decision
+        return None
 
     def builtin_sound_url(self, name: str) -> str | None:
         """Absolute URL of a built-in tone, as media players need one."""

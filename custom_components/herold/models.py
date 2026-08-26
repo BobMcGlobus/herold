@@ -281,6 +281,9 @@ class Alarm:
     workday_only: bool = False
     valid_until: datetime | None = None
     snoozes: int = 0
+    # How long the current snooze was granted for, so the card can show a
+    # countdown rather than a bare "snoozed".
+    snooze_seconds: int = 0
     skip_next: bool = False
 
     @property
@@ -383,6 +386,7 @@ class Alarm:
                 self.valid_until.isoformat() if self.valid_until else None
             ),
             "snoozes": self.snoozes,
+            "snooze_seconds": self.snooze_seconds,
             "skip_next": self.skip_next,
         }
 
@@ -413,6 +417,7 @@ class Alarm:
             workday_only=data.get("workday_only", False),
             valid_until=_parse_datetime(data.get("valid_until")),
             snoozes=data.get("snoozes", 0),
+            snooze_seconds=data.get("snooze_seconds", 0),
             skip_next=data.get("skip_next", False),
         )
 

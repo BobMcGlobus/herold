@@ -159,6 +159,14 @@ class HeroldCoordinator:
                 )
             )
 
+        bed_sensor = self.config.get(CONF_ALARM_BED_SENSOR)
+        if bed_sensor:
+            self._unsubs.append(
+                async_track_state_change_event(
+                    self.hass, [bed_sensor], self._async_bed_changed
+                )
+            )
+
         await self.query_manager.async_setup()
         await self.scheduler.async_setup()
         await self.watcher.async_setup()
@@ -535,6 +543,19 @@ class HeroldCoordinator:
     async def async_ask(self, query: Query) -> DeliveryResult:
         """Run the dispatch pipeline for a query."""
         return await self.query_manager.async_ask(query)
+
+    @callback
+    def _async_bed_changed(self, event: Event[EventStateChangedData]) -> None:
+        """Getting out of bed is the most honest dismiss there is.
+
+        The bed sensor was only ever read on demand, so leaving the bed did
+        nothing while the alarm was ringing — you had to reach for a phone
+        to stop the noise you had already got up because of.
+        """
+        new_state = event.data["new_state"]
+        if new_state is None or new_state.state == STATE_ON:
+            return
+        self.alarms.async_note_out_of_bed()
 
     @property
     def in_bed(self) -> bool:

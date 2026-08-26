@@ -40,6 +40,7 @@ from .const import (
     CONF_ALARM_SAT_ENTITY,
     CONF_ALARM_SICK_ENTITY,
     CONF_ALARM_SNOOZE_MINUTES,
+    CONF_ALARM_UP_SECONDS,
     CONF_ALARM_VERIFY_DISMISS,
     CONF_ALARM_VERIFY_SECONDS,
     CONF_ALARM_VOLUME_MAX,
@@ -79,6 +80,7 @@ from .const import (
     DEFAULT_ALARM_LIGHT_LEAD_MINUTES,
     DEFAULT_ALARM_MAX_RINGS,
     DEFAULT_ALARM_SNOOZE_MINUTES,
+    DEFAULT_ALARM_UP_SECONDS,
     DEFAULT_ALARM_VERIFY_DISMISS,
     DEFAULT_ALARM_VERIFY_SECONDS,
     DEFAULT_ALARM_VOLUME_MAX,
@@ -283,6 +285,14 @@ def build_alarm_schema(rooms: list[dict[str, Any]]) -> vol.Schema:
                 )
             ),
             vol.Required(
+                CONF_ALARM_UP_SECONDS,
+                default=DEFAULT_ALARM_UP_SECONDS,
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=0, max=300, step=5, mode=NumberSelectorMode.BOX
+                )
+            ),
+            vol.Required(
                 CONF_ALARM_LIGHT_LEAD_MINUTES,
                 default=DEFAULT_ALARM_LIGHT_LEAD_MINUTES,
             ): NumberSelector(
@@ -330,6 +340,7 @@ ALARM_KEYS = (
     CONF_ALARM_MAX_RINGS,
     CONF_ALARM_VERIFY_DISMISS,
     CONF_ALARM_VERIFY_SECONDS,
+    CONF_ALARM_UP_SECONDS,
     CONF_ALARM_LIGHT_LEAD_MINUTES,
     CONF_ALARM_COVER_ENTITIES,
     CONF_ALARM_COVER_LEAD_MINUTES,

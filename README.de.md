@@ -246,6 +246,12 @@ Der Test wirft keinen Fehler, er berichtet: die Antwort enthält `media_player`,
 | normal | 45 s | 6 Durchgängen | 3× |
 | hartnäckig | 25 s | 15 Durchgängen | 1×, dann verweigert |
 
+**Aufstehen beendet den Wecker.** Verlässt du das Bett, während ein Wecker klingelt, prüft oder schlummert, wird er beendet — sobald das Bett `alarm_up_seconds` lang leer bleibt (Standard 30 s, lang genug dass Umdrehen ihn nicht abbricht). `0` schaltet es ab.
+
+**Schlummern per Sprache** stellt jetzt eine echte Frage. Mit `voice_snooze` nutzt der Satellit `assist_satellite.ask_question` und hört auf die Antwort: „schlummern" / „snooze" / „noch fünf Minuten" verschiebt, „aus" / „ich bin wach" / „stopp" beendet. Braucht ein Home Assistant mit `assist_satellite.ask_question`; ohne das loggt der Wecker eine Warnung und klingelt normal weiter.
+
+**Songs werden gespielt, nicht neu gestartet.** Mit `sound_mode: media` oder `music_assistant` startet der Wecker den Titel einmal, spätere Durchgänge drehen nur lauter — ein erneutes `play_media` alle 45 Sekunden würde den Song neu starten oder zum nächsten springen. Die Lautstärke wird für die gesamte Weckdauer gehalten statt zwischen den Durchgängen zurückgesetzt, und Ausschalten oder Schlummern stoppt die Wiedergabe.
+
 **Die Lautstärke** bleibt zwischen einer einstellbaren Unter- und Obergrenze (Optionen → Wecker). Der erste Durchgang startet an der Untergrenze und klettert Richtung Obergrenze, solange du nicht reagierst — ein abends leise gedrehter Lautsprecher kann den Wecker also nicht mehr schlucken.
 
 **Wo er klingelt.** Ohne Vorgabe sucht Herold das Ziel selbst: im Bett → Schlafzimmer, schon auf → aktiver Raum, nichts belegt → Schlafzimmer. Das ist geraten und kann daneben liegen — der Media Player des aktiven Raums ist womöglich ein Fernseher. Zwei Felder pro Wecker überschreiben das:

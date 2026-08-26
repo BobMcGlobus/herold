@@ -48,6 +48,9 @@ class VolumeController:
         self.hass = hass
         self._original: dict[str, float] = {}
         self._depth: dict[str, int] = {}
+        # Volumes held for the duration of an alarm, keyed by player. The
+        # value is the level to put back, or None if it was unknown.
+        self._held: dict[str, float | None] = {}
 
     @asynccontextmanager
     async def announce_at(
@@ -60,6 +63,35 @@ class VolumeController:
         finally:
             if applied and entity_id:
                 await self._async_release(entity_id)
+
+    async def async_hold(self, entity_id: str | None, volume: float) -> None:
+        """Set a volume that stays until it is explicitly released.
+
+        `announce_at` restores as soon as the player falls idle, which is
+        exactly wrong for an alarm playing a four-minute song: the volume
+        would snap back mid-track. A hold lasts until the alarm ends.
+        """
+        if not entity_id:
+            return
+        if entity_id not in self._held:
+            state = self.hass.states.get(entity_id)
+            current = (
+                state.attributes.get(ATTR_MEDIA_VOLUME_LEVEL)
+                if state is not None
+                else None
+            )
+            self._held[entity_id] = (
+                float(current) if current is not None else None
+            )
+        await self._async_set_volume(entity_id, volume)
+
+    async def async_release_hold(self, entity_id: str | None) -> None:
+        """Put back the volume a hold replaced, without waiting for idle."""
+        if not entity_id or entity_id not in self._held:
+            return
+        original = self._held.pop(entity_id)
+        if original is not None:
+            await self._async_set_volume(entity_id, original)
 
     async def _async_apply(
         self, entity_id: str | None, volume: float | None

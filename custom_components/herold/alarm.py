@@ -36,6 +36,7 @@ from .const import (
     CONF_ALARM_LIGHT_LEAD_MINUTES,
     CONF_ALARM_SICK_ENTITY,
     CONF_ALARM_SNOOZE_MINUTES,
+    CONF_ALARM_UP_SECONDS,
     CONF_ALARM_VERIFY_DISMISS,
     CONF_ALARM_VERIFY_SECONDS,
     CONF_ALARM_WORKDAY_SENSOR,
@@ -43,6 +44,7 @@ from .const import (
     DEFAULT_ALARM_LIGHT_LEAD_MINUTES,
     DEFAULT_ALARM_MESSAGE,
     DEFAULT_ALARM_SNOOZE_MINUTES,
+    DEFAULT_ALARM_UP_SECONDS,
     DEFAULT_ALARM_VERIFY_DISMISS,
     DEFAULT_ALARM_VERIFY_SECONDS,
     EVENT_ALARM_DISMISSED,
@@ -51,6 +53,8 @@ from .const import (
     EVENT_ALARM_SKIPPED,
     EVENT_ALARM_SNOOZED,
     EVENT_ALARM_TRIGGERED,
+    VOICE_ANSWER_DISMISS,
+    VOICE_ANSWER_SNOOZE,
     signal_alarm,
 )
 from .models import Alarm
@@ -85,6 +89,9 @@ class AlarmManager:
         self.coordinator = coordinator
         self.alarms: dict[str, Alarm] = {}
         self._timers: dict[str, list[Callable[[], None]]] = {}
+        # Pending "did he really get up" check, kept apart from the per-alarm
+        # timers so re-arming it cannot cancel a ring.
+        self._up_check: Callable[[], None] | None = None
 
     async def async_setup(self) -> None:
         """Restore alarms, drop expired ones and re-arm their timers."""
@@ -113,6 +120,9 @@ class AlarmManager:
             for cancel in cancels:
                 cancel()
         self._timers.clear()
+        if self._up_check is not None:
+            self._up_check()
+            self._up_check = None
 
     # -- Queries -----------------------------------------------------------
 
@@ -273,10 +283,13 @@ class AlarmManager:
 
         alarm.snoozes += 1
         alarm.status = ALARM_STATUS_SNOOZED
+        alarm.snooze_seconds = delay * 60
         alarm.next_trigger = dt_util.utcnow() + timedelta(minutes=delay)
         self._cancel_timers(alarm.id)
         self._arm_ring_timer(alarm)
         self._persist(alarm)
+        # Snoozing has to actually stop the noise.
+        await self._async_silence(alarm)
         self.coordinator.hass.bus.async_fire(
             EVENT_ALARM_SNOOZED,
             {ATTR_ID: alarm.id, "minutes": delay, "snoozes_used": alarm.snoozes},
@@ -304,6 +317,7 @@ class AlarmManager:
             self._cancel_timers(alarm.id)
             self._arm_verify_timer(alarm)
             self._persist(alarm)
+            await self._async_silence(alarm)
             _LOGGER.debug(
                 "Alarm %s dismissed while still in bed — verifying", alarm.id
             )
@@ -317,7 +331,9 @@ class AlarmManager:
         """Really end the alarm: routine, then reschedule or clean up."""
         alarm.rings = 0
         alarm.snoozes = 0
+        alarm.snooze_seconds = 0
         self._cancel_timers(alarm.id)
+        await self._async_silence(alarm)
         await self.coordinator.alarm_output.async_routine(alarm)
 
         if alarm.is_repeating and not alarm.is_expired:
@@ -338,6 +354,78 @@ class AlarmManager:
         )
         _LOGGER.debug("Alarm %s dismissed", alarm.id)
         self._notify_change()
+
+    @callback
+    def async_note_out_of_bed(self) -> None:
+        """The bed emptied — arm the "he got up" check.
+
+        Debounced rather than immediate: rolling over or sitting up can drop
+        an occupancy sensor for a second, and cancelling an alarm on that
+        would be a very expensive false positive.
+        """
+        alarm = next(
+            (
+                item
+                for item in self.alarms.values()
+                if item.status
+                in (
+                    ALARM_STATUS_RINGING,
+                    ALARM_STATUS_VERIFYING,
+                    ALARM_STATUS_SNOOZED,
+                )
+            ),
+            None,
+        )
+        if alarm is None:
+            return
+        delay = int(
+            self.coordinator.config.get(
+                CONF_ALARM_UP_SECONDS, DEFAULT_ALARM_UP_SECONDS
+            )
+        )
+
+        async def _confirm(_now: Any) -> None:
+            if self.coordinator.in_bed:
+                _LOGGER.debug("Alarm %s: back in bed, not dismissing", alarm.id)
+                return
+            if alarm.id not in self.alarms:
+                return
+            _LOGGER.debug("Alarm %s dismissed — out of bed for %ss", alarm.id, delay)
+            self.coordinator.add_history(
+                "alarm_dismissed", alarm.label or alarm.describe(), reason="got up"
+            )
+            await self._async_finish(alarm)
+
+        if self._up_check is not None:
+            self._up_check()
+        self._up_check = async_call_later(self.coordinator.hass, delay, _confirm)
+
+    async def _async_silence(self, alarm: Alarm) -> None:
+        """Stop whatever the alarm is playing, without letting it throw."""
+        try:
+            await self.coordinator.alarm_output.async_stop(alarm)
+        except Exception:
+            _LOGGER.exception("Alarm %s could not be silenced", alarm.id)
+
+    async def _async_voice_decision(self, alarm: Alarm) -> bool:
+        """Ask by voice and act on the answer. True if the alarm is settled."""
+        try:
+            answer = await self.coordinator.alarm_output.async_ask_snooze(alarm)
+        except Exception:
+            _LOGGER.exception("Alarm %s voice snooze failed", alarm.id)
+            return False
+        if answer == VOICE_ANSWER_SNOOZE:
+            try:
+                await self.async_snooze(alarm.id)
+            except HomeAssistantError as err:
+                # Budget spent — say so rather than silently ringing on.
+                _LOGGER.debug("Alarm %s refused the spoken snooze: %s", alarm.id, err)
+                return False
+            return True
+        if answer == VOICE_ANSWER_DISMISS:
+            await self.async_dismiss(alarm.id)
+            return True
+        return False
 
     def _resolve(self, alarm_id: str | None) -> Alarm:
         if alarm_id:
@@ -541,7 +629,12 @@ class AlarmManager:
         first_ring = alarm.rings == 0
         alarm.status = ALARM_STATUS_RINGING
         alarm.rings += 1
+        alarm.snooze_seconds = 0
         self._persist(alarm)
+        # Before playing, not after: play_media blocks until the player has
+        # actually started, and the card should show "ringing" the moment
+        # the alarm goes off, not seconds later.
+        self._notify_change()
 
         if first_ring:
             self.coordinator.hass.bus.async_fire(
@@ -575,6 +668,10 @@ class AlarmManager:
 
         # Someone may have dismissed or snoozed while we were playing.
         if alarm.status != ALARM_STATUS_RINGING:
+            self._notify_change()
+            return
+
+        if alarm.voice_snooze and await self._async_voice_decision(alarm):
             return
         alarm.next_trigger = dt_util.utcnow() + timedelta(
             seconds=int(alarm.profile["interval"])

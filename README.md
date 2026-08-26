@@ -354,6 +354,24 @@ all fifteen rings.
 occupancy counts as a reflex, and after a grace period the alarm resumes.
 Turn it off in the options if that is too strict.
 
+**Getting up also ends it.** Leaving the bed while an alarm is ringing,
+verifying or snoozed dismisses it, once the bed has stayed empty for
+`alarm_up_seconds` (default 30 s — long enough that rolling over does not
+cancel the alarm). Set it to `0` to switch that off.
+
+**Voice snooze** asks a real question. With `voice_snooze` the satellite
+uses `assist_satellite.ask_question` and listens for the answer:
+"schlummern" / "snooze" / "noch fünf Minuten" snoozes, "aus" / "ich bin
+wach" / "stopp" dismisses. Needs a Home Assistant with
+`assist_satellite.ask_question`; without it the alarm logs a warning and
+carries on ringing.
+
+**Songs are played, not restarted.** With `sound_mode: media` or
+`music_assistant` the alarm starts the track once and later rings only turn
+it up — re-issuing playback every 45 seconds would restart the song or skip
+to the next one. The volume is held for the whole alarm instead of being
+restored between rings, and dismissing or snoozing stops playback.
+
 **Before the sound**, lights fade up (default 20 minutes early) and blinds
 open (default 5 minutes early) — both times configurable, `0` disables the
 stage. The **good-morning routine** (a script or scene) runs once you really

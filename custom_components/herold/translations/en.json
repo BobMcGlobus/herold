@@ -291,7 +291,11 @@
           "alarm_cover_position": "Blind position (%)",
           "alarm_routine": "Good morning routine (runs after getting up)",
           "alarm_workday_sensor": "Workday sensor",
-          "alarm_sick_entity": "Sick day toggle"
+          "alarm_sick_entity": "Sick day toggle",
+          "alarm_up_seconds": "Getting up: bed empty for … seconds"
+        },
+        "data_description": {
+          "alarm_up_seconds": "How long the bed must stay empty before a ringing or snoozed alarm counts as answered. 0 disables it."
         }
       }
     },

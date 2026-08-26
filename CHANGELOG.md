@@ -6,6 +6,38 @@ README) are German — see `translations/`. Entity ids below use the English
 names; on a German instance they are the translated ones, e.g.
 `sensor.herold_naechster_wecker` for `sensor.*_next_alarm`.
 
+## 1.6.0 — The ring loop, fixed
+
+Seven reports from a week of real mornings. Most of them share a cause: the
+alarm was built around a five-second tone, and a song is not a tone.
+
+- **A song is started once, not on every ring.** `media` and
+  `music_assistant` alarms used to re-issue `play_media` every 45 seconds,
+  which restarts the track or skips to the next one. Later rings now only
+  raise the volume, and only if the player actually stopped is playback
+  started again
+- **A song keeps its volume.** The announcement volume was restored as soon
+  as the player fell idle — or after 60 s regardless, which for a four
+  minute track meant it faded back mid-song. Alarm volume is now *held* for
+  the whole alarm and given back when the alarm ends
+- **Dismissing and snoozing stop the music.** Neither used to; the song
+  simply played on after the alarm was over
+- **Getting out of bed ends the alarm.** The bed sensor was only ever read
+  on demand, so leaving it did nothing while the alarm rang. It is now
+  watched: an empty bed for `alarm_up_seconds` (default 30 s, new option)
+  dismisses a ringing, verifying or snoozed alarm. The debounce matters —
+  rolling over drops an occupancy sensor for a moment
+- **Voice snooze works.** It used to route the alarm to a satellite that
+  announced the message and then listened for nothing. It now asks via
+  `assist_satellite.ask_question` and acts on the answer — "schlummern",
+  "noch fünf Minuten", "aus", "ich bin wach"
+- **The card updates the moment the alarm goes off.** The state was only
+  published after playback had started, which on a slow player is seconds
+  late, and a dismiss during playback published nothing at all
+- **A running snooze is shown as a countdown** with a draining bar and
+  mm:ss left, ticking once a second. The tile turns blue while snoozed and
+  offers "Ich bin wach"; a ringing tile says which ring it is on
+
 ## 1.5.1 — When a speaker says no
 
 An Apple TV refusing to stream the wake-up file exposed three things that

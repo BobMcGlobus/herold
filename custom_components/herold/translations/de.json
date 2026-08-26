@@ -291,7 +291,11 @@
           "alarm_cover_position": "Rolladen-Position (%)",
           "alarm_routine": "Guten-Morgen-Routine (läuft nach dem Aufstehen)",
           "alarm_workday_sensor": "Arbeitstag-Sensor",
-          "alarm_sick_entity": "Krankheits-Schalter"
+          "alarm_sick_entity": "Krankheits-Schalter",
+          "alarm_up_seconds": "Aufgestanden: Bett leer für … Sekunden"
+        },
+        "data_description": {
+          "alarm_up_seconds": "Wie lange das Bett leer bleiben muss, damit ein klingelnder oder schlummernder Wecker als erledigt gilt. 0 schaltet es ab."
         }
       }
     },
