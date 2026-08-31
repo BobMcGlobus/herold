@@ -382,6 +382,7 @@ class HeroldNextAlarmSensor(HeroldSignalSensor):
                     "workday_only": alarm.workday_only,
                     "routine": alarm.routine,
                     "follow_me": alarm.follow_me,
+                    "require_bed": alarm.require_bed,
                     # Where this one would ring — the top-level "target" is
                     # only the default, and per-alarm targets differ.
                     "target": alarm.target,

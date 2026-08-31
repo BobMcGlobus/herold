@@ -278,6 +278,10 @@ class Alarm:
     # on the couch or a timer at the desk, where the bed sensor is silent
     # and irrelevant.
     follow_me: bool = False
+    # Only ring if the bed sensor says I am in it. Off by default: an alarm
+    # that silently does not ring because a sensor misread is a worse
+    # failure than one that rings when you are already up.
+    require_bed: bool = False
     workday_only: bool = False
     valid_until: datetime | None = None
     snoozes: int = 0
@@ -381,6 +385,7 @@ class Alarm:
             "routine": self.routine,
             "target": self.target,
             "follow_me": self.follow_me,
+            "require_bed": self.require_bed,
             "workday_only": self.workday_only,
             "valid_until": (
                 self.valid_until.isoformat() if self.valid_until else None
@@ -414,6 +419,7 @@ class Alarm:
             routine=data.get("routine"),
             target=data.get("target"),
             follow_me=data.get("follow_me", False),
+            require_bed=data.get("require_bed", False),
             workday_only=data.get("workday_only", False),
             valid_until=_parse_datetime(data.get("valid_until")),
             snoozes=data.get("snoozes", 0),

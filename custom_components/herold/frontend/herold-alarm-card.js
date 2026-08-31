@@ -301,6 +301,7 @@
             routine: alarm.routine || "",
             target: alarm.target || "",
             follow_me: !!alarm.follow_me,
+            require_bed: !!alarm.require_bed,
             valid_until: toLocalInput(alarm.valid_until),
             skip_next: !!alarm.skip_next,
             repeating: (alarm.days || []).length > 0,
@@ -320,6 +321,7 @@
             routine: "",
             target: "",
             follow_me: false,
+            require_bed: false,
             valid_until: "",
             skip_next: false,
             repeating: false,
@@ -487,6 +489,7 @@
         routine: draft.routine,
         target: draft.target,
         follow_me: !!draft.follow_me,
+        require_bed: !!draft.require_bed,
         valid_until: draft.valid_until,
       };
       if (this._editing === "new") {
@@ -602,6 +605,9 @@
         badges.push(["mdi:map-marker-account", "folgt mir"]);
       }
       if (alarm.workday_only) badges.push(["mdi:briefcase", "Arbeitstage"]);
+      if (alarm.require_bed && !alarm.follow_me) {
+        badges.push(["mdi:bed", "nur im Bett"]);
+      }
       if (alarm.blocked) badges.push(["mdi:sleep-off", "heute blockiert"]);
       if (alarm.skip_next) badges.push(["mdi:debug-step-over", "übersprungen"]);
       if (alarm.routine) badges.push(["mdi:play-circle", "Routine"]);
@@ -907,6 +913,20 @@
               <span>Nur an Arbeitstagen</span>
             </label>
             <div class="hint">Feiertage und Krankmeldung blockieren ihn dann.</div>
+            ${
+              draft.follow_me
+                ? ""
+                : `<label class="check">
+                     <input type="checkbox" data-field="require_bed"
+                       ${draft.require_bed ? "checked" : ""}>
+                     <span>Nur wenn ich im Bett liege</span>
+                   </label>
+                   <div class="hint">
+                     Klingelt gar nicht, wenn der Bettsensor zur Weckzeit
+                     nichts meldet — auch das Licht bleibt dann aus. Ohne
+                     Bettsensor wirkungslos.
+                   </div>`
+            }
             <label class="check">
               <input type="checkbox" data-field="voice_snooze"
                 ${draft.voice_snooze ? "checked" : ""}>

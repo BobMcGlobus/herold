@@ -354,6 +354,14 @@ all fifteen rings.
 occupancy counts as a reflex, and after a grace period the alarm resumes.
 Turn it off in the options if that is too strict.
 
+**Ring only when I'm in bed.** `require_bed` skips an alarm — sound *and*
+sunrise phase — when the bed sensor reports an empty bed at wake-up time.
+Off by default, and deliberately one-sided: only a sensor that positively
+says "empty" may block a wake-up. `unknown`, `unavailable`, a missing
+entity or no bed sensor at all all ring anyway and log a warning, because a
+missed alarm costs far more than one that rings while you are already up.
+Ignored for `follow_me` alarms, which are by definition not about the bed.
+
 **Getting up also ends it.** Leaving the bed while an alarm is ringing,
 verifying or snoozed dismisses it, once the bed has stayed empty for
 `alarm_up_seconds` (default 30 s — long enough that rolling over does not

@@ -392,3 +392,92 @@ async def test_a_refused_spoken_snooze_keeps_ringing(
         await manager.async_snooze(alarm.id)
     assert await manager._async_voice_decision(alarm) is False
     assert alarm.status == ALARM_STATUS_RINGING
+
+
+# -- Only ring when I'm actually in bed -------------------------------------
+
+
+async def test_an_in_bed_only_alarm_stays_quiet_when_the_bed_is_empty(
+    hass, manager: AlarmManager, calls
+) -> None:
+    manager.coordinator.config |= {CONF_ALARM_BED_SENSOR: "binary_sensor.bed"}
+    hass.states.async_set("binary_sensor.bed", "off")
+    alarm = _add(manager, require_bed=True, days=["mon"])
+    await manager._async_ring(alarm)
+    await hass.async_block_till_done()
+    assert not [call for call in calls if call[1] == "play_media"]
+    assert alarm.status != ALARM_STATUS_RINGING
+
+
+async def test_an_in_bed_only_alarm_rings_when_the_bed_is_occupied(
+    hass, manager: AlarmManager, calls
+) -> None:
+    manager.coordinator.config |= {CONF_ALARM_BED_SENSOR: "binary_sensor.bed"}
+    hass.states.async_set("binary_sensor.bed", "on")
+    alarm = _add(manager, require_bed=True, days=["mon"])
+    await manager._async_ring(alarm)
+    await hass.async_block_till_done()
+    assert [call for call in calls if call[1] == "play_media"]
+
+
+async def test_the_sunrise_phase_obeys_the_bed_gate(
+    hass, manager: AlarmManager, calls
+) -> None:
+    """Blinds opening at 06:10 for an empty bed is the same bug, earlier."""
+    manager.coordinator.config |= {CONF_ALARM_BED_SENSOR: "binary_sensor.bed"}
+    hass.states.async_set("binary_sensor.bed", "off")
+    alarm = _add(manager, require_bed=True)
+    assert manager._bed_gate(alarm) == "not in bed"
+
+
+async def test_without_a_bed_sensor_the_gate_gets_out_of_the_way(
+    hass, manager: AlarmManager, caplog
+) -> None:
+    """Never silently swallow an alarm because a sensor was never set up."""
+    manager.coordinator.in_bed = False
+    alarm = _add(manager, require_bed=True)
+    assert manager._bed_gate(alarm) is None
+    assert "no bed sensor is configured" in caplog.text
+
+
+async def test_follow_me_overrides_the_bed_gate(
+    hass, manager: AlarmManager
+) -> None:
+    """A couch nap is explicitly not about the bed."""
+    manager.coordinator.config |= {CONF_ALARM_BED_SENSOR: "binary_sensor.bed"}
+    hass.states.async_set("binary_sensor.bed", "off")
+    alarm = _add(manager, require_bed=True, follow_me=True)
+    assert manager._bed_gate(alarm) is None
+
+
+async def test_ordinary_alarms_are_untouched(
+    hass, manager: AlarmManager
+) -> None:
+    """Default off: an alarm that does not ring is the worse failure."""
+    manager.coordinator.config |= {CONF_ALARM_BED_SENSOR: "binary_sensor.bed"}
+    hass.states.async_set("binary_sensor.bed", "off")
+    assert manager._bed_gate(_add(manager)) is None
+
+
+@pytest.mark.parametrize("reading", ["unknown", "unavailable"])
+async def test_a_dropped_out_bed_sensor_never_swallows_an_alarm(
+    hass, manager: AlarmManager, caplog, reading: str
+) -> None:
+    """Jonas' Withings sensor goes unknown at 02:35; the alarm is at 09:29.
+
+    Only a sensor that positively reports an empty bed may block a wake-up.
+    Anything else rings — a missed alarm costs far more than a spurious one.
+    """
+    manager.coordinator.config |= {CONF_ALARM_BED_SENSOR: "binary_sensor.bed"}
+    hass.states.async_set("binary_sensor.bed", reading)
+    alarm = _add(manager, require_bed=True)
+    assert manager._bed_gate(alarm) is None
+    assert reading in caplog.text
+
+
+async def test_a_missing_bed_sensor_entity_still_rings(
+    hass, manager: AlarmManager
+) -> None:
+    """Configured but never created — the alarm must not disappear with it."""
+    manager.coordinator.config |= {CONF_ALARM_BED_SENSOR: "binary_sensor.gone"}
+    assert manager._bed_gate(_add(manager, require_bed=True)) is None

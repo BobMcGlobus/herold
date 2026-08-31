@@ -45,6 +45,7 @@ from .const import (
     ATTR_QUESTION,
     ATTR_REASON,
     ATTR_RECIPIENT,
+    ATTR_REQUIRE_BED,
     ATTR_ROUTINE,
     ATTR_SCHEDULED_FOR,
     ATTR_SCOPE,
@@ -205,6 +206,7 @@ _ALARM_FIELDS = {
     vol.Optional(ATTR_ROUTINE): vol.Any("", cv.entity_id),
     vol.Optional(ATTR_TARGET): vol.Any("", cv.entity_id),
     vol.Optional(ATTR_FOLLOW_ME): cv.boolean,
+    vol.Optional(ATTR_REQUIRE_BED): cv.boolean,
     vol.Optional(ATTR_WORKDAY_ONLY): cv.boolean,
     vol.Optional(ATTR_VALID_UNTIL): cv.string,
     vol.Optional(ATTR_ENABLED): cv.boolean,
@@ -488,6 +490,7 @@ def _alarm_changes(data: dict) -> dict:
         ATTR_ROUTINE,
         ATTR_TARGET,
         ATTR_FOLLOW_ME,
+        ATTR_REQUIRE_BED,
         ATTR_WORKDAY_ONLY,
         ATTR_ENABLED,
     ):

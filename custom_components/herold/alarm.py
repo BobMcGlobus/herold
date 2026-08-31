@@ -18,7 +18,7 @@ from datetime import timedelta
 import logging
 from typing import TYPE_CHECKING, Any, Final
 
-from homeassistant.const import STATE_ON
+from homeassistant.const import STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -32,6 +32,7 @@ from .const import (
     ALARM_STATUS_SNOOZED,
     ALARM_STATUS_VERIFYING,
     ATTR_ID,
+    CONF_ALARM_BED_SENSOR,
     CONF_ALARM_COVER_LEAD_MINUTES,
     CONF_ALARM_LIGHT_LEAD_MINUTES,
     CONF_ALARM_SICK_ENTITY,
@@ -440,6 +441,40 @@ class AlarmManager:
 
     # -- Blocking ----------------------------------------------------------
 
+    def _bed_gate(self, alarm: Alarm) -> str | None:
+        """Return a reason if an in-bed-only alarm must stay quiet.
+
+        Checked when the alarm fires, not when it is scheduled: where the
+        user is at 22:00 says nothing about where they are at 06:30. A
+        `follow_me` alarm is explicitly not about sleeping, so the bed has
+        no say over it.
+        """
+        if not alarm.require_bed or alarm.follow_me:
+            return None
+        sensor = self.coordinator.config.get(CONF_ALARM_BED_SENSOR)
+        if not sensor:
+            _LOGGER.warning(
+                "Alarm %s wants to ring only in bed, but no bed sensor is "
+                "configured — ringing anyway",
+                alarm.id,
+            )
+            return None
+        state = self.coordinator.hass.states.get(sensor)
+        if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+            # Only a sensor that positively says "empty" may swallow an
+            # alarm. Bed sensors drop out — a missed wake-up is far more
+            # expensive than one that rings while you are already up.
+            _LOGGER.warning(
+                "Alarm %s: bed sensor %s is %s — ringing anyway",
+                alarm.id,
+                sensor,
+                state.state if state else "missing",
+            )
+            return None
+        if state.state == STATE_ON:
+            return None
+        return "not in bed"
+
     def is_blocked(self, alarm: Alarm) -> str | None:
         """Return a reason if a work alarm must not ring today.
 
@@ -565,7 +600,7 @@ class AlarmManager:
 
     async def _async_pre_alarm(self, alarm: Alarm, kind: str) -> None:
         """Run one stage of the sunrise phase."""
-        if not alarm.enabled or self.is_blocked(alarm):
+        if not alarm.enabled or self.is_blocked(alarm) or self._bed_gate(alarm):
             return
         _LOGGER.debug("Alarm %s pre-phase: %s", alarm.id, kind)
         try:
@@ -604,7 +639,7 @@ class AlarmManager:
             self._notify_change()
             return
 
-        if reason := self.is_blocked(alarm):
+        if reason := (self.is_blocked(alarm) or self._bed_gate(alarm)):
             _LOGGER.debug("Alarm %s skipped: %s", alarm.id, reason)
             self.coordinator.hass.bus.async_fire(
                 EVENT_ALARM_SKIPPED, {ATTR_ID: alarm.id, "reason": reason}

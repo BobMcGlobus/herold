@@ -6,6 +6,21 @@ README) are German — see `translations/`. Entity ids below use the English
 names; on a German instance they are the translated ones, e.g.
 `sensor.herold_naechster_wecker` for `sensor.*_next_alarm`.
 
+## 1.7.0 — Alarms that only ring in bed
+
+- **New per-alarm `require_bed`.** The alarm is skipped — sound and sunrise
+  phase both — when the bed sensor reports an empty bed at wake-up time.
+  Off by default; switch it on per alarm in the card under "Nur an
+  Arbeitstagen"
+- The gate is deliberately one-sided: **only a sensor that positively
+  reports an empty bed may block a wake-up.** `unknown`, `unavailable`, a
+  missing entity or no configured bed sensor all ring anyway and log a
+  warning. Bed sensors drop out — a missed alarm costs far more than one
+  that rings while you are already up
+- Ignored for `follow_me` alarms, which are by definition not about the bed
+- The alarm tile shows "nur im Bett" as a badge, and `sensor.*_next_alarm`
+  exposes `require_bed` per alarm
+
 ## 1.6.0 — The ring loop, fixed
 
 Seven reports from a week of real mornings. Most of them share a cause: the

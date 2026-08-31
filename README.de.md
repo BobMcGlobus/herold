@@ -246,6 +246,8 @@ Der Test wirft keinen Fehler, er berichtet: die Antwort enthält `media_player`,
 | normal | 45 s | 6 Durchgängen | 3× |
 | hartnäckig | 25 s | 15 Durchgängen | 1×, dann verweigert |
 
+**Nur klingeln, wenn ich im Bett liege.** `require_bed` überspringt einen Wecker — Ton *und* Sonnenaufgangsphase —, wenn der Bettsensor zur Weckzeit ein leeres Bett meldet. Standardmäßig aus, und bewusst einseitig: nur ein Sensor, der ausdrücklich „leer" sagt, darf einen Wecker verschlucken. `unknown`, `unavailable`, eine fehlende Entität oder gar kein Bettsensor klingeln trotzdem und loggen eine Warnung — ein verpasster Wecker kostet weit mehr als einer, der klingelt während du schon wach bist. Ohne Wirkung bei `follow_me`-Weckern, die per Definition nichts mit dem Bett zu tun haben.
+
 **Aufstehen beendet den Wecker.** Verlässt du das Bett, während ein Wecker klingelt, prüft oder schlummert, wird er beendet — sobald das Bett `alarm_up_seconds` lang leer bleibt (Standard 30 s, lang genug dass Umdrehen ihn nicht abbricht). `0` schaltet es ab.
 
 **Schlummern per Sprache** stellt jetzt eine echte Frage. Mit `voice_snooze` nutzt der Satellit `assist_satellite.ask_question` und hört auf die Antwort: „schlummern" / „snooze" / „noch fünf Minuten" verschiebt, „aus" / „ich bin wach" / „stopp" beendet. Braucht ein Home Assistant mit `assist_satellite.ask_question`; ohne das loggt der Wecker eine Warnung und klingelt normal weiter.

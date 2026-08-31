@@ -354,6 +354,9 @@ alarm_set:
     follow_me:
       selector:
         boolean:
+    require_bed:
+      selector:
+        boolean:
     workday_only:
       selector:
         boolean:
@@ -451,6 +454,9 @@ alarm_update:
             - media_player
             - assist_satellite
     follow_me:
+      selector:
+        boolean:
+    require_bed:
       selector:
         boolean:
     workday_only:
